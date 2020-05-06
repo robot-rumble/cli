@@ -12,7 +12,7 @@ use wasmer_runtime::{
 use wasmer_wasi::WasiVersion;
 
 use anyhow::{anyhow, bail, Context};
-use clap::{App, Arg, SubCommand};
+use clap::{App, AppSettings, Arg, SubCommand};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 
@@ -31,22 +31,40 @@ fn app() -> App<'static, 'static> {
     App::new("Robot Runner CLI")
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
+        .setting(AppSettings::SubcommandRequiredElseHelp)
         .subcommand(
-            SubCommand::with_name("wasm")
-                .help("run a wasm module as a robot. NOTE: this is for advanced users only, you probably don't need to use this")
+            SubCommand::with_name("run")
+                .about("Run 2 robots against each other")
+                .long_about(
+                    "Run 2 robots. If the robot identifier matches the regex /^[_\\w]+\\/[_\\w]+$/, e.g. 'user_1/robotv3_Final', \
+                    it will be interpreted as a robot published to https://robot-rumble.org; otherwise it will be interpreted as a path \
+                    to a local file that must be named with an extension of a supported language"
+                )
+                .arg(Arg::with_name("ROBOT1").required(true))
+                .arg(Arg::with_name("ROBOT2").required(true))
+        )
+        .subcommand(
+            SubCommand::with_name("run-command")
+                .about("Run 2 commands as robots")
+                .long_about(
+                    "Run 2 commands as robots. Each recieve a path to their source file as the first argument (after the ones provided \
+                    in the command string), and after they initalize, they should print a `Result<(), ProgramError>` in \
+                    serde_json format and a newline. They will then start recieving newline-delimited `ProgramInput` json objects, and \
+                    for each one should output a `ProgramOutput` json object followed by a newline. The match is over when stdin is closed, and \
+                    the process may be forcefully terminated after that."
+                )
                 .arg(Arg::with_name("ROBOT1_EXE").required(true))
                 .arg(Arg::with_name("ROBOT1_SOURCE").required(true))
                 .arg(Arg::with_name("ROBOT2_EXE").required(true))
                 .arg(Arg::with_name("ROBOT2_SOURCE").required(true))
         )
         .subcommand(
-            SubCommand::with_name("run")
-                .help("run 2 robots against each other")
-                .arg(Arg::with_name("ROBOT1").required(true))
-                .arg(Arg::with_name("ROBOT2").required(true))
-        )
-        .subcommand(
-            SubCommand::with_name("run-command")
+            SubCommand::with_name("wasm")
+                .about("Run 2 wasi modules as robots") 
+                .long_about(
+                    "Run a wasi module as a robot. This will be fully sandboxed, so is (probably) safe \
+                    to use with untrusted modules. The process will communicate the same way as described in the run-command about text."
+                )
                 .arg(Arg::with_name("ROBOT1_EXE").required(true))
                 .arg(Arg::with_name("ROBOT1_SOURCE").required(true))
                 .arg(Arg::with_name("ROBOT2_EXE").required(true))
