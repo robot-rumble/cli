@@ -277,17 +277,16 @@ async fn run<R: logic::RobotRunner>(
 
 fn turn_cb(turn_state: &logic::CallbackInput) {
     println!(
-        "State after turn {turn}:\n{logs}\nOutputs: {outputs:?}\nMap:\n{map}",
-        turn = turn_state.state.turn,
-        logs = turn_state
-            .logs
-            .iter()
-            .format_with("\n", |(team, logs), f| f(&format_args!(
+        "After turn {}:\n{}",
+        turn_state.state.turn, turn_state.state.state
+    );
+    for (team, logs) in &turn_state.logs {
+        if !logs.is_empty() {
+            println!(
                 "Logs for {:?}:\n{}",
                 team,
                 logs.iter().map(|s| s.trim()).format("\n"),
-            ))),
-        outputs = turn_state.robot_outputs,
-        map = turn_state.state.state,
-    );
+            )
+        }
+    }
 }
