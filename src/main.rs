@@ -32,6 +32,16 @@ fn app() -> App<'static, 'static> {
         .version(clap::crate_version!())
         .author(clap::crate_authors!())
         .setting(AppSettings::SubcommandRequiredElseHelp)
+        .arg(
+            Arg::with_name("turns")
+                .short("t")
+                .long("turns")
+                .takes_value(true)
+                .value_name("TURN_NUM")
+                .default_value("10")
+                .global(true)
+                .help("Sets the number of turns to run")
+        )
         .subcommand(
             SubCommand::with_name("run")
                 .about("Run 2 robots against each other")
@@ -82,11 +92,15 @@ fn make_sourcedir(f: impl AsRef<Path>) -> anyhow::Result<tempfile::TempDir> {
     Ok(sourcedir)
 }
 
+struct RunOpts {
+    turns: usize,
+}
+
 async fn try_main() -> anyhow::Result<()> {
     let matches = app().get_matches();
-    // let command = args
-    //     .next()
-    //     .ok_or_else(|| anyhow!("you must pass a command to run"))?;
+    let runopts = RunOpts {
+        turns: clap::value_t!(matches.value_of("turns"), usize)?,
+    };
     if let Some(matches) = matches.subcommand_matches("run") {
         let make_input = |robot_val| -> anyhow::Result<_> {
             let id = RobotId::from_osstr(matches.value_of_os(robot_val).unwrap())?;
@@ -104,7 +118,7 @@ async fn try_main() -> anyhow::Result<()> {
         };
         let (m1, v1, p1) = make_input("ROBOT1")?;
         let (m2, v2, p2) = make_input("ROBOT2")?;
-        run_wasm((&m1, v1, p1.as_ref()), (&m2, v2, p2.as_ref())).await?
+        run_wasm(runopts, (&m1, v1, p1.as_ref()), (&m2, v2, p2.as_ref())).await?
     } else if let Some(matches) = matches.subcommand_matches("wasm") {
         let make_input = |exe_val, src_val| -> anyhow::Result<_> {
             let sourcedir = make_sourcedir(matches.value_of_os(src_val).unwrap())?;
@@ -121,7 +135,7 @@ async fn try_main() -> anyhow::Result<()> {
         };
         let (m1, v1, p1) = make_input("ROBOT1_EXE", "ROBOT1_SOURCE")?;
         let (m2, v2, p2) = make_input("ROBOT2_EXE", "ROBOT2_SOURCE")?;
-        run_wasm((&m1, v1, p1.path()), (&m2, v2, p2.path())).await?
+        run_wasm(runopts, (&m1, v1, p1.path()), (&m2, v2, p2.path())).await?
     } else if let Some(matches) = matches.subcommand_matches("run-command") {
         let make_runner = |exe_val, src_val| -> anyhow::Result<_> {
             let mut args = shell_words::split(matches.value_of(exe_val).unwrap())
@@ -139,7 +153,7 @@ async fn try_main() -> anyhow::Result<()> {
             make_runner("ROBOT1_EXE", "ROBOT1_SOURCE")?,
             make_runner("ROBOT2_EXE", "ROBOT2_SOURCE")?,
         );
-        run(r1, r2).await
+        run(runopts, r1, r2).await
     }
     Ok(())
 }
@@ -159,10 +173,10 @@ fn get_wasm_cache() -> Option<FileSystemCache> {
 
 impl Lang {
     fn get_wasm(self) -> (&'static WasmModule, WasiVersion) {
-        macro_rules! compiled_module {
-            ($path:literal) => {{
+        macro_rules! compiled_runner {
+            ($name:literal) => {{
                 static MODULE: Lazy<(WasmModule, WasiVersion)> = Lazy::new(|| {
-                    let wasm = include_bytes!($path);
+                    let wasm = include_bytes!(concat!("../../logic/webapp-dist/runners/", $name));
                     let hash = WasmHash::generate(wasm);
                     let cache = get_wasm_cache();
                     let module = cache
@@ -170,7 +184,7 @@ impl Lang {
                         .and_then(|cache| cache.load(hash).ok())
                         .unwrap_or_else(|| {
                             let module = wasmer_runtime::compile(wasm)
-                                .expect(concat!("couldn't compile wasm module ", $path));
+                                .expect(concat!("couldn't compile wasm module ", $name));
                             if let Some(mut cache) = cache {
                                 cache.store(hash, module.clone()).ok();
                             }
@@ -185,8 +199,8 @@ impl Lang {
             }};
         }
         match self {
-            Self::Python => compiled_module!("../../target/wasm32-wasi/release/pyrunner.wasm"),
-            Self::Javascript => compiled_module!("../../logic/langs/javascript/jsrunner.wasm"),
+            Self::Python => compiled_runner!("pyrunner.wasm"),
+            Self::Javascript => compiled_runner!("jsrunner.wasm"),
         }
     }
 }
@@ -222,7 +236,11 @@ impl<'a> RobotId<'a> {
 
 type WasmInput<'a> = (&'a WasmModule, WasiVersion, &'a Path);
 
-async fn run_wasm(inp1: WasmInput<'_>, inp2: WasmInput<'_>) -> anyhow::Result<()> {
+async fn run_wasm(
+    runopts: RunOpts,
+    inp1: WasmInput<'_>,
+    inp2: WasmInput<'_>,
+) -> anyhow::Result<()> {
     let make_runner = |(module, version, sourcedir): WasmInput| -> anyhow::Result<_> {
         let mut state = wasmer_wasi::state::WasiState::new("robot");
         wasi_runner::add_stdio(&mut state);
@@ -244,12 +262,16 @@ async fn run_wasm(inp1: WasmInput<'_>, inp2: WasmInput<'_>) -> anyhow::Result<()
     eprintln!("initializing runners");
     let (r1, r2) = tokio::join!(make_runner(inp1)?, make_runner(inp2)?);
     eprintln!("done!");
-    run(r1, r2).await;
+    run(runopts, r1, r2).await;
     Ok(())
 }
 
-async fn run<R: logic::RobotRunner>(r1: logic::ProgramResult<R>, r2: logic::ProgramResult<R>) {
-    let output = logic::run(r1, r2, turn_cb, 10).await;
+async fn run<R: logic::RobotRunner>(
+    opts: RunOpts,
+    r1: logic::ProgramResult<R>,
+    r2: logic::ProgramResult<R>,
+) {
+    let output = logic::run(r1, r2, turn_cb, opts.turns).await;
     println!("Output: {:?}", output);
 }
 
