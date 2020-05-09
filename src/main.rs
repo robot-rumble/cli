@@ -1,4 +1,4 @@
-use native_runner::TokioRunner;
+use native_runner::{CommandRunner, TokioRunner};
 use std::ffi::OsStr;
 use std::fs;
 use std::path::Path;
@@ -11,8 +11,10 @@ use wasmer_runtime::{
 };
 use wasmer_wasi::WasiVersion;
 
+use logic::RobotRunner;
+
 use anyhow::{anyhow, bail, Context};
-use clap::{App, AppSettings, Arg, SubCommand};
+use clap::{App, AppSettings, Arg, ArgMatches, SubCommand};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
 
@@ -92,35 +94,90 @@ fn make_sourcedir(f: impl AsRef<Path>) -> anyhow::Result<tempfile::TempDir> {
     Ok(sourcedir)
 }
 
-struct RunOpts {
-    turns: usize,
+pub enum Runner {
+    Command(CommandRunner),
+    Wasi(
+        TokioRunner<
+            io::BufWriter<wasi_runner::WasiStdinWriter>,
+            io::BufReader<wasi_runner::WasiStdoutReader>,
+        >,
+        /// the directory that we store the source file in; we need to keep it open
+        tempfile::TempDir,
+    ),
+}
+
+#[async_trait::async_trait(?Send)]
+impl RobotRunner for Runner {
+    async fn run(&mut self, input: logic::ProgramInput) -> logic::RunnerResult {
+        match self {
+            Self::Command(r) => r.run(input).await,
+            Self::Wasi(r, _) => r.run(input).await,
+        }
+    }
+}
+
+impl Runner {
+    async fn new_wasm(
+        module: &WasmModule,
+        version: WasiVersion,
+        dir: tempfile::TempDir,
+    ) -> anyhow::Result<logic::ProgramResult<Self>> {
+        let mut state = wasmer_wasi::state::WasiState::new("robot");
+        wasi_runner::add_stdio(&mut state);
+        state
+            .preopen(|p| p.directory(&dir).alias("source").read(true))
+            .unwrap()
+            .arg("/source/sourcecode");
+        let imports =
+            wasmer_wasi::generate_import_object_from_state(state.build().unwrap(), version);
+        let instance = module
+            .instantiate(&imports)
+            .map_err(|_| anyhow!("error instantiating wasm module"))?;
+        let mut proc = WasiProcess::spawn(instance);
+        let stdin = io::BufWriter::new(proc.take_stdin().unwrap());
+        let stdout = io::BufReader::new(proc.take_stdout().unwrap());
+        task::spawn(proc);
+        Ok(TokioRunner::new(stdin, stdout)
+            .await
+            .map(|r| Self::Wasi(r, dir)))
+    }
+    async fn from_id(id: &OsStr) -> anyhow::Result<logic::ProgramResult<Runner>> {
+        let id = RobotId::from_osstr(id)?;
+        match id {
+            RobotId::Published { user, robot } => {
+                let _ = (user, robot);
+                todo!("fetch published robots")
+            }
+            RobotId::Local { source, lang } => {
+                let sourcedir = make_sourcedir(source)?;
+                let (module, version) = lang.get_wasm();
+                Runner::new_wasm(module, version, sourcedir).await
+            }
+        }
+    }
 }
 
 async fn try_main() -> anyhow::Result<()> {
     let matches = app().get_matches();
-    let runopts = RunOpts {
-        turns: clap::value_t!(matches.value_of("turns"), usize)?,
-    };
-    if let Some(matches) = matches.subcommand_matches("run") {
-        let make_input = |robot_val| -> anyhow::Result<_> {
-            let id = RobotId::from_osstr(matches.value_of_os(robot_val).unwrap())?;
-            match id {
-                RobotId::Published { user, robot } => {
-                    let _ = (user, robot);
-                    todo!("fetch published robots")
-                }
-                RobotId::Local { source, lang } => {
-                    let sourcedir = make_sourcedir(source)?;
-                    let (module, version) = lang.get_wasm();
-                    Ok((module, version, sourcedir))
-                }
-            }
-        };
-        let (m1, v1, p1) = make_input("ROBOT1")?;
-        let (m2, v2, p2) = make_input("ROBOT2")?;
-        run_wasm(runopts, (&m1, v1, p1.as_ref()), (&m2, v2, p2.as_ref())).await?
+    let nturns = clap::value_t!(matches.value_of("turns"), usize)?;
+    let (r1, r2) = get_runners(&matches).await?;
+
+    let output = logic::run(r1, r2, turn_cb, nturns).await;
+    println!("Output: {:?}", output);
+
+    Ok(())
+}
+
+async fn get_runners(
+    matches: &ArgMatches<'static>,
+) -> anyhow::Result<(logic::ProgramResult<Runner>, logic::ProgramResult<Runner>)> {
+    let ret = if let Some(matches) = matches.subcommand_matches("run") {
+        tokio::try_join!(
+            Runner::from_id(matches.value_of_os("ROBOT1").unwrap()),
+            Runner::from_id(matches.value_of_os("ROBOT2").unwrap()),
+        )?
     } else if let Some(matches) = matches.subcommand_matches("wasm") {
-        let make_input = |exe_val, src_val| -> anyhow::Result<_> {
+        let make_runner = |exe_val, src_val| async move {
             let sourcedir = make_sourcedir(matches.value_of_os(src_val).unwrap())?;
 
             let wasm = fs::read(matches.value_of_os(exe_val).unwrap())
@@ -131,13 +188,14 @@ async fn try_main() -> anyhow::Result<()> {
                 .unwrap_or(wasmer_wasi::WasiVersion::Latest);
             eprintln!("done!");
 
-            Ok((module, version, sourcedir))
+            Runner::new_wasm(&module, version, sourcedir).await
         };
-        let (m1, v1, p1) = make_input("ROBOT1_EXE", "ROBOT1_SOURCE")?;
-        let (m2, v2, p2) = make_input("ROBOT2_EXE", "ROBOT2_SOURCE")?;
-        run_wasm(runopts, (&m1, v1, p1.path()), (&m2, v2, p2.path())).await?
+        tokio::try_join!(
+            make_runner("ROBOT1_EXE", "ROBOT1_SOURCE"),
+            make_runner("ROBOT2_EXE", "ROBOT2_SOURCE"),
+        )?
     } else if let Some(matches) = matches.subcommand_matches("run-command") {
-        let make_runner = |exe_val, src_val| -> anyhow::Result<_> {
+        let make_runner = |exe_val, src_val| async move {
             let mut args = shell_words::split(matches.value_of(exe_val).unwrap())
                 .with_context(|| format!("Couldn't parse {} as shell arguments", exe_val))?
                 .into_iter();
@@ -146,16 +204,17 @@ async fn try_main() -> anyhow::Result<()> {
             })?);
             cmd.args(args);
             cmd.arg(matches.value_of_os(src_val).unwrap());
-            Ok(TokioRunner::new_cmd(cmd))
+            Ok::<_, anyhow::Error>(TokioRunner::new_cmd(cmd).await.map(Runner::Command))
         };
 
-        let (r1, r2) = tokio::join!(
-            make_runner("ROBOT1_EXE", "ROBOT1_SOURCE")?,
-            make_runner("ROBOT2_EXE", "ROBOT2_SOURCE")?,
-        );
-        run(runopts, r1, r2).await
-    }
-    Ok(())
+        tokio::try_join!(
+            make_runner("ROBOT1_EXE", "ROBOT1_SOURCE"),
+            make_runner("ROBOT2_EXE", "ROBOT2_SOURCE"),
+        )?
+    } else {
+        unreachable!()
+    };
+    Ok(ret)
 }
 
 #[derive(Clone, Copy)]
@@ -232,47 +291,6 @@ impl<'a> RobotId<'a> {
         };
         Ok(RobotId::Local { source, lang })
     }
-}
-
-type WasmInput<'a> = (&'a WasmModule, WasiVersion, &'a Path);
-
-async fn run_wasm(
-    runopts: RunOpts,
-    inp1: WasmInput<'_>,
-    inp2: WasmInput<'_>,
-) -> anyhow::Result<()> {
-    let make_runner = |(module, version, sourcedir): WasmInput| -> anyhow::Result<_> {
-        let mut state = wasmer_wasi::state::WasiState::new("robot");
-        wasi_runner::add_stdio(&mut state);
-        state
-            .preopen(|p| p.directory(sourcedir).alias("source").read(true))
-            .unwrap()
-            .arg("/source/sourcecode");
-        let imports =
-            wasmer_wasi::generate_import_object_from_state(state.build().unwrap(), version);
-        let instance = module
-            .instantiate(&imports)
-            .map_err(|e| anyhow!("error instantiating module: {}", e))?;
-        let mut proc = WasiProcess::spawn(instance);
-        let stdin = io::BufWriter::new(proc.take_stdin().unwrap());
-        let stdout = io::BufReader::new(proc.take_stdout().unwrap());
-        task::spawn(proc);
-        Ok(TokioRunner::new(stdin, stdout))
-    };
-    eprintln!("initializing runners");
-    let (r1, r2) = tokio::join!(make_runner(inp1)?, make_runner(inp2)?);
-    eprintln!("done!");
-    run(runopts, r1, r2).await;
-    Ok(())
-}
-
-async fn run<R: logic::RobotRunner>(
-    opts: RunOpts,
-    r1: logic::ProgramResult<R>,
-    r2: logic::ProgramResult<R>,
-) {
-    let output = logic::run(r1, r2, turn_cb, opts.turns).await;
-    println!("Output: {:?}", output);
 }
 
 fn turn_cb(turn_state: &logic::CallbackInput) {
