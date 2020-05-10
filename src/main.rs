@@ -1,4 +1,5 @@
 use native_runner::{CommandRunner, TokioRunner};
+use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -17,6 +18,8 @@ use anyhow::{anyhow, bail, Context};
 use clap::{App, AppSettings, Arg, SubCommand};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
+
+mod server;
 
 #[tokio::main]
 async fn main() {
@@ -62,6 +65,11 @@ fn app() -> App<'static, 'static> {
                         .help("Sets the number of turns to run")
                 )
         )
+        .subcommand(
+            SubCommand::with_name("webdisplay")
+                .about("Battle robots in a web display")
+                .arg(Arg::with_name("ROBOTS").required(true).multiple(true).min_values(2))
+        )
 }
 
 fn make_sourcedir(f: impl AsRef<Path>) -> anyhow::Result<tempfile::TempDir> {
@@ -86,7 +94,7 @@ pub enum Runner {
     ),
 }
 
-#[async_trait::async_trait(?Send)]
+#[async_trait::async_trait]
 impl RobotRunner for Runner {
     async fn run(&mut self, input: logic::ProgramInput) -> logic::RunnerResult {
         match self {
@@ -147,10 +155,9 @@ impl Runner {
                 let sourcedir = make_sourcedir(source)?;
                 let wasm = tokio::fs::read(runner)
                     .await
-                    .with_context(|| format!("couldn't read {}", runner.display()))?;
-                let (module, version) = wasm_from_cache_or_compile(&wasm).with_context(|| {
-                    format!("couldn't compile wasm module at {}", runner.display())
-                })?;
+                    .with_context(|| format!("couldn't read {}", runner))?;
+                let (module, version) = wasm_from_cache_or_compile(&wasm)
+                    .with_context(|| format!("couldn't compile wasm module at {}", runner))?;
                 Runner::new_wasm(&module, version, &runner_args, sourcedir).await
             }
         }
@@ -159,9 +166,9 @@ impl Runner {
 
 async fn try_main() -> anyhow::Result<()> {
     let matches = app().get_matches();
-    let nturns = clap::value_t!(matches.value_of("turns"), usize)?;
 
     if let Some(matches) = matches.subcommand_matches("run") {
+        let nturns = clap::value_t!(matches.value_of("turns"), usize)?;
         let get_runner = |val_name| async move {
             let id = RobotId::parse(matches.value_of_os(val_name).unwrap())
                 .with_context(|| format!("couldn't parse {}", val_name))?;
@@ -171,6 +178,13 @@ async fn try_main() -> anyhow::Result<()> {
         let (r1, r2) = tokio::try_join!(get_runner("ROBOT1"), get_runner("ROBOT2"))?;
         let output = logic::run(r1, r2, turn_cb, nturns).await;
         println!("Output: {:?}", output);
+    } else if let Some(matches) = matches.subcommand_matches("webdisplay") {
+        let ids = matches
+            .values_of_os("ROBOTS")
+            .unwrap()
+            .map(RobotId::parse)
+            .collect::<Result<Vec<_>, _>>()?;
+        server::serve(ids).await?;
     }
 
     Ok(())
@@ -231,6 +245,7 @@ impl Lang {
     }
 }
 
+#[derive(Clone)]
 pub enum RobotId {
     Published {
         user: String,
@@ -245,14 +260,36 @@ pub enum RobotId {
         args: Vec<String>,
     },
     LocalRunner {
-        runner: PathBuf,
+        runner: String,
         runner_args: Vec<String>,
-        source: PathBuf,
+        source: String,
     },
 }
 
 impl RobotId {
-    fn parse(s: &OsStr) -> anyhow::Result<Self> {
+    pub fn display_id(&self) -> (&str, Cow<str>) {
+        match self {
+            Self::Published { user, robot } => (user, robot.into()),
+            Self::Local { source, .. } => (".local", source.to_string_lossy()),
+            Self::Command { command, args } => (
+                ".command",
+                std::iter::once(command).chain(args).join(" ").into(),
+            ),
+            Self::LocalRunner {
+                runner,
+                runner_args,
+                source,
+            } => (
+                ".localrunner",
+                std::iter::once(runner)
+                    .chain(runner_args)
+                    .chain(std::iter::once(source))
+                    .join(" ")
+                    .into(),
+            ),
+        }
+    }
+    pub fn parse(s: &OsStr) -> anyhow::Result<Self> {
         let s = match s.to_str() {
             Some(s) => s,
             None => return Self::from_path(PathBuf::from(s)),
@@ -282,10 +319,9 @@ impl RobotId {
                 }
                 "localrunner" => {
                     let (runner, mut runner_args) = parse_command(content)?;
-                    let runner = PathBuf::from(runner);
-                    let source = PathBuf::from(runner_args.pop().ok_or_else(|| {
+                    let source = runner_args.pop().ok_or_else(|| {
                         anyhow!("you must have a source argument to the local runner")
-                    })?);
+                    })?;
                     Ok(Self::LocalRunner { runner, runner_args, source })
                 }
                 _ => bail!("unknown runner type {:?}", typ)
