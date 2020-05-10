@@ -76,7 +76,7 @@ pub async fn serve(ids: Vec<RobotId>) -> anyhow::Result<()> {
     let url = format!("http://localhost:{}", listener.local_addr()?.port());
 
     webbrowser::open(&url).ok();
-    eprintln!("Website running at {}", url);
+    println!("Website running at {}", url);
     eprintln!("Press Enter to stop");
 
     let mut stdin = io::stdin();
@@ -127,7 +127,6 @@ async fn run(
             "data": output,
         })))
         .ok();
-        eprintln!("all done!");
         drop(tx)
     });
     // so that it doesn't print a panic message
