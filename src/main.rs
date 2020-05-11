@@ -66,7 +66,7 @@ fn app() -> App<'static, 'static> {
                 )
         )
         .subcommand(
-            SubCommand::with_name("web")
+            SubCommand::with_name("web-run")
                 .about("Battle robots in a web display")
                 .arg(Arg::with_name("ROBOTS").required(true).multiple(true).min_values(2))
         )
@@ -178,7 +178,7 @@ async fn try_main() -> anyhow::Result<()> {
         let (r1, r2) = tokio::try_join!(get_runner("ROBOT1"), get_runner("ROBOT2"))?;
         let output = logic::run(r1, r2, turn_cb, nturns).await;
         println!("Output: {:?}", output);
-    } else if let Some(matches) = matches.subcommand_matches("web") {
+    } else if let Some(matches) = matches.subcommand_matches("web-run") {
         let ids = matches
             .values_of_os("ROBOTS")
             .unwrap()
