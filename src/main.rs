@@ -77,6 +77,7 @@ enum Rumblebot {
         #[structopt(short)]
         password: Option<String>,
     },
+    Logout {},
 }
 
 fn make_sourcedir(f: impl AsRef<Path>) -> anyhow::Result<tempfile::TempDir> {
@@ -241,6 +242,16 @@ async fn try_main() -> anyhow::Result<()> {
                 XDG_NAME,
                 Config {
                     auth_key: Some(auth_key),
+                    ..config().clone()
+                },
+            )
+            .context("Error storing configuration with auth_key")?;
+        }
+        Rumblebot::Logout {} => {
+            confy::store(
+                XDG_NAME,
+                Config {
+                    auth_key: None,
                     ..config().clone()
                 },
             )
