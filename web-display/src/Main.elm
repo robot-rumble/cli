@@ -23,12 +23,13 @@ paths =
     { getRobotCode = "/getrobotcode"
     -- we don't use this, so w/e
     , getUserRobots = "/getrobots"
+    , updateRobotCode = "/updaterobot"
     }
 
 main : Program Flags Model Msg
 main =
     Browser.element
-        { init = \{user, robot} -> init (Api.Context user robot paths) "/"
+        { init = \{user, robot} -> init (Api.Context user robot 0 paths) "/"
         , view = view
         , update = \msg old ->
             let
