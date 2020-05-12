@@ -16,9 +16,10 @@ use logic::RobotRunner;
 
 use anyhow::{anyhow, bail, Context};
 use itertools::Itertools;
-use once_cell::sync::Lazy;
+use once_cell::sync::{Lazy, OnceCell};
 use structopt::StructOpt;
 
+mod api;
 mod server;
 
 #[tokio::main]
@@ -34,13 +35,7 @@ async fn main() {
 
 #[derive(StructOpt)]
 #[structopt(name = "Robot Runner CLI", author)]
-struct Rumblebot {
-    #[structopt(subcommand)]
-    cmd: RumblebotCmd,
-}
-
-#[derive(StructOpt)]
-enum RumblebotCmd {
+enum Rumblebot {
     /// Run 2 robots.
     ///
     /// If robot identifier matches the regex /^[_\\w]+\\/[_\\w]+$/, e.g. 'user_1/robotv3_Final`,
@@ -71,11 +66,16 @@ enum RumblebotCmd {
         #[structopt(parse(from_os_str), min_values = 2)]
         robots: Vec<OsString>,
         /// The network address to listen to.
-        #[structopt(short = "a", long = "address", default_value = "127.0.0.1")]
+        #[structopt(short, long, default_value = "127.0.0.1")]
         address: String,
         /// The network port to listen to.
-        #[structopt(short = "p", long = "port", env = "PORT")]
+        #[structopt(short, long, env = "PORT")]
         port: Option<u16>,
+    },
+    Login {
+        username: String,
+        #[structopt(short)]
+        password: Option<String>,
     },
 }
 
@@ -141,8 +141,18 @@ impl Runner {
     async fn from_id(id: &RobotId) -> anyhow::Result<logic::ProgramResult<Self>> {
         match id {
             RobotId::Published { user, robot } => {
-                let _ = (user, robot);
-                todo!("fetch published robots")
+                let info = api::robot_info(user, robot)
+                    .await?
+                    .ok_or_else(|| anyhow!("robot {}/{} not found", user, robot))?;
+                let code = api::robot_code(info.id).await?.ok_or_else(|| {
+                    anyhow!("robot {}/{} has not published its code yet", user, robot)
+                })?;
+                let sourcedir =
+                    tempfile::tempdir().context("couldn't create temporary directory")?;
+                fs::write(sourcedir.path().join("sourcecode"), code)
+                    .context("Couldn't write published code to disk")?;
+                let (module, version) = info.lang.get_wasm();
+                Runner::new_wasm(module, version, &[], sourcedir).await
             }
             RobotId::Local { source, lang } => {
                 let sourcedir = make_sourcedir(source)?;
@@ -171,11 +181,31 @@ impl Runner {
     }
 }
 
+#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone)]
+struct Config {
+    #[serde(default)]
+    auth_key: Option<String>,
+    #[serde(default = "default_base_url")]
+    base_url: Cow<'static, str>,
+}
+fn default_base_url() -> Cow<'static, str> {
+    "https://robotrumble.org".into()
+}
+static CONFIG: OnceCell<Config> = OnceCell::new();
+fn config() -> &'static Config {
+    CONFIG.get().unwrap()
+}
+
+const XDG_NAME: &str = "rumblebot";
+
 async fn try_main() -> anyhow::Result<()> {
     let opt: Rumblebot = Rumblebot::from_args();
+    CONFIG
+        .get_or_try_init(|| confy::load(XDG_NAME))
+        .context("Unable to load config")?;
 
-    match opt.cmd {
-        RumblebotCmd::Run {
+    match opt {
+        Rumblebot::Run {
             robot1,
             robot2,
             turns,
@@ -189,7 +219,7 @@ async fn try_main() -> anyhow::Result<()> {
             let output = logic::run(r1, r2, turn_cb, turns).await;
             println!("Output: {:?}", output);
         }
-        RumblebotCmd::WebRun {
+        Rumblebot::WebRun {
             robots,
             address,
             port,
@@ -200,19 +230,36 @@ async fn try_main() -> anyhow::Result<()> {
                 .collect::<Result<Vec<_>, _>>()?;
             server::serve(ids, address, port).await?;
         }
+        Rumblebot::Login { username, password } => {
+            let password = match password {
+                Some(pass) => pass,
+                None => rpassword::read_password_from_tty(Some("Password: "))
+                    .context("Error reading password (try passing the -p option)")?,
+            };
+            let auth_key = api::authenticate(&username, &password).await?;
+            confy::store(
+                XDG_NAME,
+                Config {
+                    auth_key: Some(auth_key),
+                    ..config().clone()
+                },
+            )
+            .context("Error storing configuration with auth_key")?;
+        }
     }
 
     Ok(())
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, strum::EnumString)]
+#[strum(serialize_all = "UPPERCASE")]
 pub enum Lang {
     Python,
     Javascript,
 }
 
 fn get_wasm_cache() -> Option<FileSystemCache> {
-    let dir = dirs::cache_dir()?.join("robot-rumble/wasm");
+    let dir = dirs::cache_dir()?.join(XDG_NAME).join("wasm");
     // unsafe because wasmer loads arbitrary code from this directory, but the wasmer
     // cli does the same thing, and there's no cve for it ¯\_(ツ)_/¯
     unsafe { FileSystemCache::new(dir).ok() }
