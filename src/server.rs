@@ -16,7 +16,7 @@ struct Context {
     ids: Arc<Vec<RobotId>>,
 }
 
-pub async fn serve(ids: Vec<RobotId>) -> anyhow::Result<()> {
+pub async fn serve(ids: Vec<RobotId>, address: String, port: Option<u16>) -> anyhow::Result<()> {
     let ids = Arc::new(ids);
     let r1 = OwningRef::new(ids.clone()).map(|v| v.first().unwrap());
 
@@ -63,17 +63,27 @@ pub async fn serve(ids: Vec<RobotId>) -> anyhow::Result<()> {
 
     let server = warp::serve(route);
 
-    let addr = std::net::IpAddr::from([0, 0, 0, 0]);
-    let bind = |port: u16| net::TcpListener::bind((addr, port));
+    let addr: std::net::IpAddr = address.parse().context("Invalid address provided")?;
+    let bind = |port| net::TcpListener::bind((addr, port));
 
-    let listener = match bind(5252).await {
+    let listener = match bind(port.unwrap_or(5252)).await {
         Ok(l) => l,
-        Err(_) => bind(0) // random port
-            .await
-            .context("couldn't bind to an address")?,
+        Err(e) => match port {
+            Some(port) => anyhow::bail!(
+                anyhow::Error::new(e).context(format!("Couldn't bind on port {}", port))
+            ),
+            None => bind(0) // random port
+                .await
+                .context("couldn't bind to any port")?,
+        },
     };
 
-    let url = format!("http://localhost:{}", listener.local_addr()?.port());
+    let domain = if address == "127.0.0.1" {
+        "localhost"
+    } else {
+        &address
+    };
+    let url = format!("http://{}:{}", domain, listener.local_addr()?.port());
 
     webbrowser::open(&url).ok();
     println!("Website running at {}", url);

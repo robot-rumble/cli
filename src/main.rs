@@ -1,6 +1,6 @@
 use native_runner::{CommandRunner, TokioRunner};
 use std::borrow::Cow;
-use std::ffi::OsStr;
+use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tokio::process::Command;
@@ -15,9 +15,9 @@ use wasmer_wasi::WasiVersion;
 use logic::RobotRunner;
 
 use anyhow::{anyhow, bail, Context};
-use clap::{App, AppSettings, Arg, SubCommand};
 use itertools::Itertools;
 use once_cell::sync::Lazy;
+use structopt::StructOpt;
 
 mod server;
 
@@ -32,44 +32,51 @@ async fn main() {
     }
 }
 
-fn app() -> App<'static, 'static> {
-    App::new("Robot Runner CLI")
-        .version(clap::crate_version!())
-        .author(clap::crate_authors!())
-        .setting(AppSettings::SubcommandRequiredElseHelp)
-        .subcommand(
-            SubCommand::with_name("run")
-                .about("Run 2 robots against each other")
-                // TODO: polish the about string
-                .long_about(
-                    "Run 2 robots. If robot identifier matches the regex /^[_\\w]+\\/[_\\w]+$/, e.g. 'user_1/robotv3_Final', \
-                    it will be interpreted as a robot published to https://robot-rumble.org; otherwise it will be interpreted as a path \
-                    to a local file that must be named with an extension of a supported language. \
-                    command: or localrunner: : \n\
-                    Each recieve a path to their source file as the first argument (after the ones provided \
-                    in the command string), and after they initalize, they should print a `Result<(), ProgramError>` in \
-                    serde_json format and a newline. They will then start recieving newline-delimited `ProgramInput` json objects, and \
-                    for each one should output a `ProgramOutput` json object followed by a newline. The match is over when stdin is closed, and \
-                    the process may be forcefully terminated after that."
-                )
-                .arg(Arg::with_name("ROBOT1").required(true))
-                .arg(Arg::with_name("ROBOT2").required(true))
-                .arg(
-                    Arg::with_name("turns")
-                        .short("t")
-                        .long("turns")
-                        .takes_value(true)
-                        .value_name("TURN_NUM")
-                        .default_value("10")
-                        .global(true)
-                        .help("Sets the number of turns to run")
-                )
-        )
-        .subcommand(
-            SubCommand::with_name("web-run")
-                .about("Battle robots in a web display")
-                .arg(Arg::with_name("ROBOTS").required(true).multiple(true).min_values(2))
-        )
+#[derive(StructOpt)]
+#[structopt(name = "Robot Runner CLI", author)]
+struct Rumblebot {
+    #[structopt(subcommand)]
+    cmd: RumblebotCmd,
+}
+
+#[derive(StructOpt)]
+enum RumblebotCmd {
+    /// Run 2 robots.
+    ///
+    /// If robot identifier matches the regex /^[_\\w]+\\/[_\\w]+$/, e.g. 'user_1/robotv3_Final`,
+    /// it will be interpreted as a robot published to https://robot-rumble.org; otherwise it will be interpreted as a path
+    /// to a local file that must be named with an extension of a supported language.
+    ///
+    /// command: or localrunner: :
+    ///
+    /// Each recieve a path to their source file as the first argument (after the ones provided
+    /// in the command string), and after they initalize, they should print a `Result<(), ProgramError>` in
+    /// serde_json format and a newline. They will then start recieving newline-delimited `ProgramInput` json objects, and
+    /// for each one should output a `ProgramOutput` json object followed by a newline. The match is over when stdin is closed, and
+    /// the process may be forcefully terminated after that.
+    Run {
+        #[structopt(parse(from_os_str))]
+        robot1: OsString,
+        #[structopt(parse(from_os_str))]
+        robot2: OsString,
+        /// The number of turns to run in the match
+        #[structopt(short, long, default_value = "10")]
+        turns: usize,
+    },
+    /// Battle robots in a web display
+    WebRun {
+        /// The robots to put in the web display.
+        ///
+        /// The first one will be the main one, run against whichever other one you choose.
+        #[structopt(parse(from_os_str), min_values = 2)]
+        robots: Vec<OsString>,
+        /// The network address to listen to.
+        #[structopt(short = "a", long = "address", default_value = "127.0.0.1")]
+        address: String,
+        /// The network port to listen to.
+        #[structopt(short = "p", long = "port", env = "PORT")]
+        port: Option<u16>,
+    },
 }
 
 fn make_sourcedir(f: impl AsRef<Path>) -> anyhow::Result<tempfile::TempDir> {
@@ -165,26 +172,34 @@ impl Runner {
 }
 
 async fn try_main() -> anyhow::Result<()> {
-    let matches = app().get_matches();
+    let opt: Rumblebot = Rumblebot::from_args();
 
-    if let Some(matches) = matches.subcommand_matches("run") {
-        let nturns = clap::value_t!(matches.value_of("turns"), usize)?;
-        let get_runner = |val_name| async move {
-            let id = RobotId::parse(matches.value_of_os(val_name).unwrap())
-                .with_context(|| format!("couldn't parse {}", val_name))?;
-            let runner = Runner::from_id(&id).await?;
-            Ok::<_, anyhow::Error>(runner)
-        };
-        let (r1, r2) = tokio::try_join!(get_runner("ROBOT1"), get_runner("ROBOT2"))?;
-        let output = logic::run(r1, r2, turn_cb, nturns).await;
-        println!("Output: {:?}", output);
-    } else if let Some(matches) = matches.subcommand_matches("web-run") {
-        let ids = matches
-            .values_of_os("ROBOTS")
-            .unwrap()
-            .map(RobotId::parse)
-            .collect::<Result<Vec<_>, _>>()?;
-        server::serve(ids).await?;
+    match opt.cmd {
+        RumblebotCmd::Run {
+            robot1,
+            robot2,
+            turns,
+        } => {
+            let get_runner = |id| async move {
+                let id = RobotId::parse(id).context("Couldn't parse robot identifier")?;
+                let runner = Runner::from_id(&id).await?;
+                Ok::<_, anyhow::Error>(runner)
+            };
+            let (r1, r2) = tokio::try_join!(get_runner(&robot1), get_runner(&robot2))?;
+            let output = logic::run(r1, r2, turn_cb, turns).await;
+            println!("Output: {:?}", output);
+        }
+        RumblebotCmd::WebRun {
+            robots,
+            address,
+            port,
+        } => {
+            let ids = robots
+                .iter()
+                .map(|id| RobotId::parse(id))
+                .collect::<Result<Vec<_>, _>>()?;
+            server::serve(ids, address, port).await?;
+        }
     }
 
     Ok(())
