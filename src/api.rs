@@ -47,7 +47,7 @@ pub struct RobotInfo {
 
 pub async fn robot_info(user: &str, robot: &str) -> anyhow::Result<Option<RobotInfo>> {
     let res = CLIENT
-        .get(build_url!("api" / "getRobotSlug" / user / robot)?)
+        .get(build_url!("api" / "get-robot" / user / robot)?)
         .send()
         .await?;
     if res.status() == StatusCode::NOT_FOUND {
@@ -58,7 +58,7 @@ pub async fn robot_info(user: &str, robot: &str) -> anyhow::Result<Option<RobotI
 }
 pub async fn robot_code(id: usize) -> anyhow::Result<Option<String>> {
     let code: String = CLIENT
-        .get(build_url!("api" / "getRobotCode" / (&id.to_string()))?)
+        .get(build_url!("api" / "get-robot-code" / (&id.to_string()))?)
         .send()
         .await?
         .json()
