@@ -78,6 +78,24 @@ enum Rumblebot {
         password: Option<String>,
     },
     Logout {},
+    Create {
+        #[structopt(parse(from_os_str))]
+        robot: PathBuf,
+        #[structopt(long, short)]
+        name: Option<String>,
+        #[structopt(long, short)]
+        lang: Option<Lang>,
+    },
+    Update {
+        #[structopt(parse(from_os_str))]
+        robot: PathBuf,
+        #[structopt(long, short)]
+        name: Option<String>,
+    },
+    Download {
+        robot: String,
+        dest: Option<PathBuf>,
+    },
 }
 
 fn make_sourcedir(f: impl AsRef<Path>) -> anyhow::Result<tempfile::TempDir> {
@@ -257,12 +275,74 @@ async fn try_main() -> anyhow::Result<()> {
             )
             .context("Error storing configuration with auth_key")?;
         }
+        Rumblebot::Create { robot, name, lang } => {
+            let code = fs::read_to_string(&robot)
+                .with_context(|| format!("Couldn't read {}", robot.display()))?;
+            let name = match name {
+                Some(ref n) => n,
+                None => robot_name_from_path(&robot)?,
+            };
+            let lang = match lang {
+                Some(l) => l,
+                None => robot.extension().and_then(Lang::from_ext).ok_or_else(|| {
+                    anyhow!("Invalid language from extension, try passing the -l option")
+                })?,
+            };
+            let info = api::create(lang, name).await?;
+            api::update_code(info.id, &code).await?;
+        }
+        Rumblebot::Update { robot, name } => {
+            let code = fs::read_to_string(&robot)
+                .with_context(|| format!("Couldn't read {}", robot.display()))?;
+            let name = match name {
+                Some(ref n) => n,
+                None => robot_name_from_path(&robot)?,
+            };
+            let (user, _) = api::whoami().await?;
+            let info = api::robot_info(&user, name).await?.ok_or_else(|| {
+                anyhow!(
+                    "No existing robot of yours with name '{}'. try the `create` subcommand instead",
+                    name
+                )
+            })?;
+            api::update_code(info.id, &code).await?;
+        }
+        Rumblebot::Download { robot, dest } => {
+            // let dest = match dest {}
+            let (user, _) = api::whoami().await?;
+            let info = api::robot_info(&user, &robot)
+                .await?
+                .ok_or_else(|| anyhow!("robot {} not found", robot))?;
+            let code = api::robot_code(info.id)
+                .await?
+                .ok_or_else(|| anyhow!("robot {} has no code", robot))?;
+            let dest = dest.unwrap_or_else(|| format!("{}.{}", robot, info.lang.ext()).into());
+            fs::write(dest, code)?;
+        }
     }
 
     Ok(())
 }
 
-#[derive(Clone, Copy, strum::EnumString)]
+fn robot_name_from_path(path: &Path) -> anyhow::Result<&str> {
+    path.file_stem()
+        .and_then(|s| s.to_str())
+        .and_then(|s| {
+            if RobotId::valid_ident(s) {
+                Some(s)
+            } else {
+                None
+            }
+        })
+        .ok_or_else(|| {
+            anyhow!(
+                "Invalid name from the file name {:?}, try passing the robot name explicitly with the -n option",
+                path
+            )
+        })
+}
+
+#[derive(Clone, Copy, strum::EnumString, strum::AsRefStr)]
 #[strum(serialize_all = "UPPERCASE")]
 pub enum Lang {
     Python,
@@ -299,6 +379,20 @@ fn wasm_from_cache_or_compile(
 }
 
 impl Lang {
+    fn from_ext(ext: &OsStr) -> Option<Self> {
+        let lang = match ext.to_str()? {
+            "py" => Lang::Python,
+            "js" | "ejs" | "mjs" => Lang::Javascript,
+            _ => return None,
+        };
+        Some(lang)
+    }
+    fn ext(self) -> &'static str {
+        match self {
+            Self::Python => "py",
+            Self::Javascript => "js",
+        }
+    }
     fn get_wasm(self) -> (&'static WasmModule, WasiVersion) {
         macro_rules! compiled_runner {
             ($name:literal) => {{
@@ -405,10 +499,12 @@ impl RobotId {
             Self::from_path(PathBuf::from(s))
         }
     }
+    fn valid_ident(s: &str) -> bool {
+        s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+    }
     fn from_published(s: &str) -> Option<Self> {
         s.split('/').collect_tuple().and_then(|(user, robot)| {
-            let valid_ident = |s: &str| s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
-            if valid_ident(user) && valid_ident(robot) {
+            if Self::valid_ident(user) && Self::valid_ident(robot) {
                 Some(Self::Published {
                     user: user.to_owned(),
                     robot: robot.to_owned(),
@@ -422,11 +518,7 @@ impl RobotId {
         let ext = source.extension().ok_or_else(|| {
             anyhow!("your robot file must have an extension so that we know what language it's in")
         })?;
-        let lang = match ext.to_str() {
-            Some("py") => Lang::Python,
-            Some("js") | Some("ejs") | Some("mjs") => Lang::Javascript,
-            _ => bail!("unknown extension {:?}", ext),
-        };
+        let lang = Lang::from_ext(ext).ok_or_else(|| anyhow!("unknown extension {:?}", ext))?;
         Ok(RobotId::Local { source, lang })
     }
 }
