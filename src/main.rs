@@ -308,9 +308,17 @@ async fn try_main() -> anyhow::Result<()> {
             api::update_code(info.id, &code).await?;
         }
         Rumblebot::Download { robot, dest } => {
-            // let dest = match dest {}
-            let (user, _) = api::whoami().await?;
-            let info = api::robot_info(&user, &robot)
+            let (user, robot) = parse_published_ident(&robot)
+                .ok_or_else(|| anyhow!("invalid robot ident '{}'", robot))?;
+            let whoami;
+            let user = match user {
+                Some(u) => u,
+                None => {
+                    whoami = api::whoami().await?.0;
+                    &whoami
+                }
+            };
+            let info = api::robot_info(user, robot)
                 .await?
                 .ok_or_else(|| anyhow!("robot {} not found", robot))?;
             let code = api::robot_code(info.id)
@@ -503,15 +511,11 @@ impl RobotId {
         s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     }
     fn from_published(s: &str) -> Option<Self> {
-        s.split('/').collect_tuple().and_then(|(user, robot)| {
-            if Self::valid_ident(user) && Self::valid_ident(robot) {
-                Some(Self::Published {
-                    user: user.to_owned(),
-                    robot: robot.to_owned(),
-                })
-            } else {
-                None
-            }
+        parse_published_ident(s).and_then(|(user, robot)| {
+            user.map(|user| Self::Published {
+                user: user.to_owned(),
+                robot: robot.to_owned(),
+            })
         })
     }
     fn from_path(source: PathBuf) -> anyhow::Result<Self> {
@@ -521,6 +525,25 @@ impl RobotId {
         let lang = Lang::from_ext(ext).ok_or_else(|| anyhow!("unknown extension {:?}", ext))?;
         Ok(RobotId::Local { source, lang })
     }
+}
+
+fn parse_published_ident(s: &str) -> Option<(Option<&str>, &str)> {
+    let mut spl = s.split('/');
+    let a = spl.next()?;
+    if !RobotId::valid_ident(a) {
+        return None;
+    }
+    let b = spl.next();
+    let ret = match b {
+        Some(robot) => {
+            if !RobotId::valid_ident(robot) {
+                return None;
+            }
+            (Some(a), robot)
+        }
+        None => (None, a),
+    };
+    Some(ret)
 }
 
 fn turn_cb(turn_state: &logic::CallbackInput) {
