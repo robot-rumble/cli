@@ -107,6 +107,12 @@ fn make_sourcedir(f: impl AsRef<Path>) -> anyhow::Result<tempfile::TempDir> {
         .context("couldn't copy file to tempdir")?;
     Ok(sourcedir)
 }
+fn make_sourcedir_inline(source: &str) -> anyhow::Result<tempfile::TempDir> {
+    let sourcedir = tempfile::tempdir().context("couldn't create temporary directory")?;
+    fs::write(sourcedir.path().join("sourcecode"), source)
+        .context("Couldn't write code to disk")?;
+    Ok(sourcedir)
+}
 
 pub enum Runner {
     Command(CommandRunner),
@@ -166,10 +172,7 @@ impl Runner {
                 let code = api::robot_code(info.id).await?.ok_or_else(|| {
                     anyhow!("robot {}/{} has not published its code yet", user, robot)
                 })?;
-                let sourcedir =
-                    tempfile::tempdir().context("couldn't create temporary directory")?;
-                fs::write(sourcedir.path().join("sourcecode"), code)
-                    .context("Couldn't write published code to disk")?;
+                let sourcedir = make_sourcedir_inline(&code)?;
                 let (module, version) = info.lang.get_wasm();
                 Runner::new_wasm(module, version, &[], sourcedir).await
             }
@@ -195,6 +198,11 @@ impl Runner {
                 let (module, version) = wasm_from_cache_or_compile(&wasm)
                     .with_context(|| format!("couldn't compile wasm module at {}", runner))?;
                 Runner::new_wasm(&module, version, &runner_args, sourcedir).await
+            }
+            RobotId::Inline { lang, source } => {
+                let sourcedir = make_sourcedir_inline(source)?;
+                let (module, version) = lang.get_wasm();
+                Runner::new_wasm(module, version, &[], sourcedir).await
             }
         }
     }
@@ -439,6 +447,10 @@ pub enum RobotId {
         runner_args: Vec<String>,
         source: String,
     },
+    Inline {
+        lang: Lang,
+        source: String,
+    },
 }
 
 impl RobotId {
@@ -462,6 +474,7 @@ impl RobotId {
                     .join(" ")
                     .into(),
             ),
+            Self::Inline { .. } => (".inline", ".".into()),
         }
     }
     pub fn parse(s: &OsStr) -> anyhow::Result<Self> {
@@ -497,9 +510,24 @@ impl RobotId {
                     let source = runner_args.pop().ok_or_else(|| {
                         anyhow!("you must have a source argument to the local runner")
                     })?;
-                    Ok(Self::LocalRunner { runner, runner_args, source })
+                    Ok(Self::LocalRunner {
+                        runner,
+                        runner_args,
+                        source,
+                    })
                 }
-                _ => bail!("unknown runner type {:?}", typ)
+                "inline" => {
+                    let (lang, source) = content
+                        .splitn(2, ';')
+                        .collect_tuple()
+                        .ok_or_else(|| anyhow!("Missing language in inline robot"))?;
+                    let lang = lang.parse().map_err(|_| anyhow!("invalid language"))?;
+                    Ok(RobotId::Inline {
+                        lang,
+                        source: source.to_owned(),
+                    })
+                }
+                _ => bail!("unknown runner type {:?}", typ),
             }
         } else if let Some(published) = Self::from_published(s) {
             Ok(published)
