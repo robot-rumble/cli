@@ -57,6 +57,9 @@ enum Rumblebot {
         /// The number of turns to run in the match
         #[structopt(short, long, default_value = "10")]
         turns: usize,
+        /// Avoid printing human-friendly info and just output JSON
+        #[structopt(long)]
+        raw: bool
     },
     /// Battle robots in a web display
     WebRun {
@@ -236,6 +239,7 @@ async fn try_main() -> anyhow::Result<()> {
             robot1,
             robot2,
             turns,
+            raw
         } => {
             let get_runner = |id| async move {
                 let id = RobotId::parse(id).context("Couldn't parse robot identifier")?;
@@ -243,8 +247,12 @@ async fn try_main() -> anyhow::Result<()> {
                 Ok::<_, anyhow::Error>(runner)
             };
             let (r1, r2) = tokio::try_join!(get_runner(&robot1), get_runner(&robot2))?;
-            let output = logic::run(r1, r2, turn_cb, turns).await;
-            println!("Output: {:?}", output);
+            let output = logic::run(r1, r2, |turn_state: _| if !raw { turn_cb(turn_state) }, turns).await;
+            if raw {
+                println!("{}", serde_json::to_string(&output).unwrap());
+            } else {
+                println!("{:?}", output);
+            }
         }
         Rumblebot::WebRun {
             robots,
