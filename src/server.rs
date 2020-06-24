@@ -59,7 +59,7 @@ pub async fn serve(ids: Vec<RobotId>, address: String, port: Option<u16>) -> any
                         .collect_vec(),
                 )
             }))
-        .or(static_dir::static_dir!("web-display/dist"));
+        .or(static_dir::static_dir!("dist"));
 
     let server = warp::serve(route);
 
