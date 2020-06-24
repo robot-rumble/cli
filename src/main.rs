@@ -66,7 +66,7 @@ enum Rumblebot {
         /// The robots to put in the web display.
         ///
         /// The first one will be the main one, run against whichever other one you choose.
-        #[structopt(parse(from_os_str), min_values = 2)]
+        #[structopt(parse(from_os_str), required = true, min_values = 2)]
         robots: Vec<OsString>,
         /// The network address to listen to.
         #[structopt(short, long, default_value = "127.0.0.1")]
