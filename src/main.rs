@@ -1,4 +1,4 @@
-use native_runner::{CommandRunner, TokioRunner};
+use runners_common::{TokioRunner, Lang};
 use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
 use std::fs;
@@ -115,6 +115,23 @@ fn make_sourcedir_inline(source: &str) -> anyhow::Result<tempfile::TempDir> {
     fs::write(sourcedir.path().join("sourcecode"), source)
         .context("Couldn't write code to disk")?;
     Ok(sourcedir)
+}
+
+
+pub type CommandRunner = TokioRunner<io::BufWriter<ChildStdin>, io::BufReader<ChildStdout>>;
+
+impl CommandRunner {
+    pub async fn new_cmd(mut command: Command) -> Result<Self, ProgramError> {
+        let mut proc = command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .expect("Failed to spawn child process");
+
+        let stdin = io::BufWriter::new(proc.stdin.take().unwrap());
+        let stdout = io::BufReader::new(proc.stdout.take().unwrap());
+        Self::new(stdin, stdout).await
+    }
 }
 
 pub enum Runner {
@@ -340,7 +357,7 @@ async fn try_main() -> anyhow::Result<()> {
             let code = api::robot_code(info.id)
                 .await?
                 .ok_or_else(|| anyhow!("robot {} has no code", robot))?;
-            let dest = dest.unwrap_or_else(|| format!("{}.{}", robot, info.lang.ext()).into());
+            let dest = dest.unwrap_or_else(|| format!("{}.{}", robot, lang_to_ext(info.lang).into());
             fs::write(dest, code)?;
         }
     }
@@ -366,12 +383,6 @@ fn robot_name_from_path(path: &Path) -> anyhow::Result<&str> {
         })
 }
 
-#[derive(Clone, Copy, strum::EnumString, strum::AsRefStr)]
-#[strum(serialize_all = "UPPERCASE")]
-pub enum Lang {
-    Python,
-    Javascript,
-}
 
 fn get_wasm_cache() -> Option<FileSystemCache> {
     let dir = dirs::cache_dir()?.join(XDG_NAME).join("wasm");
@@ -402,37 +413,20 @@ fn wasm_from_cache_or_compile(
     Ok((module, version))
 }
 
-impl Lang {
-    fn from_ext(ext: &OsStr) -> Option<Self> {
-        let lang = match ext.to_str()? {
-            "py" => Lang::Python,
-            "js" | "ejs" | "mjs" => Lang::Javascript,
-            _ => return None,
-        };
-        Some(lang)
-    }
-    fn ext(self) -> &'static str {
-        match self {
-            Self::Python => "py",
-            Self::Javascript => "js",
-        }
-    }
-    fn get_wasm(self) -> (&'static WasmModule, WasiVersion) {
-        macro_rules! compiled_runner {
-            ($name:literal) => {{
-                static MODULE: Lazy<(WasmModule, WasiVersion)> = Lazy::new(|| {
-                    let wasm = include_bytes!(concat!("../../logic/webapp-dist/runners/", $name));
-                    wasm_from_cache_or_compile(wasm)
-                        .expect(concat!("couldn't compile wasm module ", $name))
-                });
-                let (module, version) = &*MODULE;
-                (module, *version)
-            }};
-        }
-        match self {
-            Self::Python => compiled_runner!("pyrunner.wasm"),
-            Self::Javascript => compiled_runner!("jsrunner.wasm"),
-        }
+fn ext_to_lang(ext: &OsStr) -> Option<Lang> {
+    let lang = match ext.to_str()? {
+        "py" => Lang::Python,
+        "js" | "ejs" | "mjs" => Lang::Javascript,
+        _ => return None,
+    };
+    Some(lang)
+}
+
+
+fn lang_to_ext(lang: Lang) -> &'static str {
+    match lang {
+        Lang::Python => "py",
+        Lang::Javascript => "js",
     }
 }
 

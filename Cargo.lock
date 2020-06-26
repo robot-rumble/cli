@@ -1252,18 +1252,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "native-runner"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "itertools",
- "logic",
- "serde",
- "serde_json",
- "tokio",
-]
-
-[[package]]
 name = "native-tls"
 version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1864,11 +1852,11 @@ dependencies = [
  "futures-util",
  "itertools",
  "logic",
- "native-runner",
  "once_cell",
  "owning_ref",
  "reqwest",
  "rpassword",
+ "runners-common",
  "serde",
  "serde_json",
  "serde_with",
@@ -1883,6 +1871,18 @@ dependencies = [
  "wasmer-runtime",
  "wasmer-wasi",
  "webbrowser",
+]
+
+[[package]]
+name = "runners-common"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "itertools",
+ "logic",
+ "serde",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
