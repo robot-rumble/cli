@@ -3,9 +3,9 @@ use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
+use tokio::io;
 use tokio::process::Command;
-use tokio::{io, task};
-use wasi_runner::WasiProcess;
+use wasi_process::WasiProcess;
 use wasmer_runtime::{
     cache::{Cache, FileSystemCache, WasmHash},
     Module as WasmModule,
@@ -59,7 +59,7 @@ enum Rumblebot {
         turns: usize,
         /// Avoid printing human-friendly info and just output JSON
         #[structopt(long)]
-        raw: bool
+        raw: bool,
     },
     /// Battle robots in a web display
     WebRun {
@@ -121,8 +121,8 @@ pub enum Runner {
     Command(CommandRunner),
     Wasi(
         TokioRunner<
-            io::BufWriter<wasi_runner::WasiStdinWriter>,
-            io::BufReader<wasi_runner::WasiStdoutReader>,
+            io::BufWriter<wasi_process::WasiStdin>,
+            io::BufReader<wasi_process::WasiStdout>,
         >,
         /// the directory that we store the source file in; we need to keep it open
         tempfile::TempDir,
@@ -147,7 +147,7 @@ impl Runner {
         dir: tempfile::TempDir,
     ) -> anyhow::Result<logic::ProgramResult<Self>> {
         let mut state = wasmer_wasi::state::WasiState::new("robot");
-        wasi_runner::add_stdio(&mut state);
+        wasi_process::add_stdio(&mut state);
         state
             .preopen(|p| p.directory(&dir).alias("source").read(true))
             .unwrap()
@@ -158,10 +158,10 @@ impl Runner {
         let instance = module
             .instantiate(&imports)
             .map_err(|_| anyhow!("error instantiating wasm module"))?;
-        let mut proc = WasiProcess::spawn(instance);
-        let stdin = io::BufWriter::new(proc.take_stdin().unwrap());
-        let stdout = io::BufReader::new(proc.take_stdout().unwrap());
-        task::spawn(proc);
+        let mut proc = WasiProcess::new(instance);
+        let stdin = io::BufWriter::new(proc.stdin.take().unwrap());
+        let stdout = io::BufReader::new(proc.stdout.take().unwrap());
+        proc.spawn();
         Ok(TokioRunner::new(stdin, stdout)
             .await
             .map(|r| Self::Wasi(r, dir)))
@@ -239,7 +239,7 @@ async fn try_main() -> anyhow::Result<()> {
             robot1,
             robot2,
             turns,
-            raw
+            raw,
         } => {
             let get_runner = |id| async move {
                 let id = RobotId::parse(id).context("Couldn't parse robot identifier")?;
@@ -247,9 +247,20 @@ async fn try_main() -> anyhow::Result<()> {
                 Ok::<_, anyhow::Error>(runner)
             };
             let (r1, r2) = tokio::try_join!(get_runner(&robot1), get_runner(&robot2))?;
-            let output = logic::run(r1, r2, |turn_state: _| if !raw { turn_cb(turn_state) }, turns).await;
+            let output = logic::run(
+                r1,
+                r2,
+                |turn_state| {
+                    if !raw {
+                        turn_cb(turn_state)
+                    }
+                },
+                turns,
+            )
+            .await;
             if raw {
-                println!("{}", serde_json::to_string(&output).unwrap());
+                let stdout = std::io::stdout();
+                serde_json::to_writer(stdout.lock(), &output).unwrap();
             } else {
                 println!("{:?}", output);
             }

@@ -18,7 +18,7 @@ webbrowser = "0.5.4"
 reqwest = { version = "0.10.6", features = ["cookies", "json"] }
 
 native-runner = { path = "../logic/runners/native" }
-wasi-runner = { path = "../logic/runners/wasi" }
+wasi-process = "0.1"
 wasmer-runtime = "0.17.0"
 wasmer-wasi = "0.17.0"
 
