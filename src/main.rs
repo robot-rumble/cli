@@ -262,7 +262,11 @@ async fn try_main() -> anyhow::Result<()> {
                 let stdout = std::io::stdout();
                 serde_json::to_writer(stdout.lock(), &output).unwrap();
             } else {
-                println!("{:?}", output);
+                if let Some(w) = output.winner {
+                    println!("Done! {:?} won", w);
+                } else {
+                    println!("Done! nobody won");
+                }
             }
         }
         Rumblebot::WebRun {
