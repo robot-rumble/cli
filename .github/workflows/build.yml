@@ -1,0 +1,33 @@
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v2
+      - run: git clone https://github.com/robot-rumble/logic ../logic
+      - run: cargo build --release
+
+      - uses: actions/upload-artifact@v2
+        if: matrix.os == 'windows-latest'
+        with:
+          name: rumblebot-${{ matrix.os }}
+          path: ../target/release/rumblebot.exe
+
+      - uses: actions/upload-artifact@v2
+        if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-latest'
+        with:
+          name: rumblebot-${{ matrix.os }}
+          path: ../target/release/rumblebot
