@@ -436,7 +436,7 @@ impl Lang {
         macro_rules! compiled_runner {
             ($name:literal) => {{
                 static MODULE: Lazy<(WasmModule, WasiVersion)> = Lazy::new(|| {
-                    let wasm = include_bytes!(concat!("../../logic/webapp-dist/runners/", $name));
+                    let wasm = include_bytes!(concat!("../../logic/wasm-dist/runners/", $name));
                     wasm_from_cache_or_compile(wasm)
                         .expect(concat!("couldn't compile wasm module ", $name))
                 });
