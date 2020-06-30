@@ -17,8 +17,15 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+
       - run: git clone https://github.com/robot-rumble/logic ../logic
       - run: aws s3 sync s3://dev-battle-runner/lang-runners ../logic/wasm-dist/lang-runners
+      - run: aws s3 sync s3://dev-battle-runner/cli-assets dist
 
       - run: cargo build --release --all-features
 
@@ -26,10 +33,10 @@ jobs:
         if: matrix.os == 'windows-latest'
         with:
           name: rumblebot-${{ matrix.os }}
-          path: ../target/release/rumblebot.exe
+          path: target/release/rumblebot.exe
 
       - uses: actions/upload-artifact@v2
         if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-latest'
         with:
           name: rumblebot-${{ matrix.os }}
-          path: ../target/release/rumblebot
+          path: target/release/rumblebot
