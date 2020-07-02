@@ -37,14 +37,8 @@ jobs:
 
       - run: cargo build --release --all-features
 
-      - uses: actions/upload-artifact@v2
-        if: matrix.os == 'windows-latest'
-        with:
-          name: rumblebot-${{ matrix.os }}
-          path: target/release/rumblebot.exe
+      - if: matrix.os == 'windows-latest'
+        run: aws s3 cp target/release/rumblebot.exe s3://${{ secrets.S3_BUCKET }}/cli-build/rumblebot-windows.exe
 
-      - uses: actions/upload-artifact@v2
-        if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-latest'
-        with:
-          name: rumblebot-${{ matrix.os }}
-          path: target/release/rumblebot
+      - if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-latest'
+        run: aws s3 cp target/release/rumblebot s3://${{ secrets.S3_BUCKET }}/cli-build/rumblebot-${{ matrix.os }}
