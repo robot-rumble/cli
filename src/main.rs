@@ -21,6 +21,7 @@ use structopt::StructOpt;
 
 mod api;
 mod server;
+mod display;
 
 #[tokio::main]
 async fn main() {
@@ -599,9 +600,10 @@ fn parse_published_ident(s: &str) -> Option<(Option<&str>, &str)> {
 
 fn turn_cb(turn_state: &logic::CallbackInput) {
     println!(
-        "After turn {}:\n{}",
-        turn_state.state.turn, turn_state.state.state
+        "After turn {}:\n",
+        turn_state.state.turn
     );
+    display::display_state(&turn_state.state.state);
     for (team, logs) in &turn_state.logs {
         if !logs.is_empty() {
             println!(
