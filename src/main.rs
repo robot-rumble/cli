@@ -37,19 +37,18 @@ async fn main() {
 #[derive(StructOpt)]
 #[structopt(name = "Robot Runner CLI", author)]
 enum Rumblebot {
-    /// Run 2 robots.
+    /// Run a battle and print the results in the terminal.
     ///
-    /// If robot identifier matches the regex /^[_\\w]+\\/[_\\w]+$/, e.g. 'user_1/robotv3_Final`,
-    /// it will be interpreted as a robot published to https://robot-rumble.org; otherwise it will be interpreted as a path
-    /// to a local file that must be named with an extension of a supported language.
-    ///
-    /// command: or localrunner: :
-    ///
-    /// Each recieve a path to their source file as the first argument (after the ones provided
-    /// in the command string), and after they initalize, they should print a `Result<(), ProgramError>` in
-    /// serde_json format and a newline. They will then start recieving newline-delimited `ProgramInput` json objects, and
-    /// for each one should output a `ProgramOutput` json object followed by a newline. The match is over when stdin is closed, and
-    /// the process may be forcefully terminated after that.
+    /// A robot is specified in one of the following ways:
+    /// 1. `$USER/$ROBOT`. A robot published on robotrumble.org
+    /// 2. `$PATH`. A path to a local file with robot code. It must have a file extension for one of the supported languages.
+    /// 3. `inline:$LANG;$CODE`. Pass the language and code directly as an argument.
+    /// 4. `command:$PATH` or `localrunner:$PATH`. The path to a native binary or wasm file, respectively. Criteria:
+    ///     After initialization, it must print a `Result<(), ProgramError>` in serde_json format and a newline.
+    ///     It will then start receiving newline-delimited `ProgramInput` json object. It must respond to
+    ///     each one with a `ProgramOutput` json object followed by a newline. The match is over when stdin is closed, and
+    ///     the process may be forcefully terminated after that.
+    #[structopt(verbatim_doc_comment)]
     Run {
         #[structopt(parse(from_os_str))]
         robot1: OsString,
@@ -62,11 +61,12 @@ enum Rumblebot {
         #[structopt(long)]
         raw: bool,
     },
-    /// Battle robots in a web display
+    /// Run a battle and show the results in the normal web display.
+    ///
+    /// For instructions on how to specify robots, see the help page for `run`.
     WebRun {
-        /// The robots to put in the web display.
-        ///
-        /// The first one will be the main one, run against whichever other one you choose.
+        /// The robots to make available to the web display. The first one will be treated as the main robot,
+        /// and the rest will be available for choosing from the UI.
         #[structopt(parse(from_os_str), required = true, min_values = 2)]
         robots: Vec<OsString>,
         /// The network address to listen to.
