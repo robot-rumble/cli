@@ -20,8 +20,8 @@ use once_cell::sync::{Lazy, OnceCell};
 use structopt::StructOpt;
 
 mod api;
-mod server;
 mod display;
+mod server;
 
 #[tokio::main]
 async fn main() {
@@ -263,7 +263,9 @@ async fn try_main() -> anyhow::Result<()> {
                 let stdout = std::io::stdout();
                 serde_json::to_writer(stdout.lock(), &output).unwrap();
             } else {
-                if let Some(w) = output.winner {
+                if !output.errors.is_empty() {
+                    println!("Errors: {:?}", output.errors)
+                } else if let Some(w) = output.winner {
                     println!("Done! {:?} won", w);
                 } else {
                     println!("Done! nobody won");
@@ -437,7 +439,8 @@ impl Lang {
         macro_rules! compiled_runner {
             ($name:literal) => {{
                 static MODULE: Lazy<(WasmModule, WasiVersion)> = Lazy::new(|| {
-                    let wasm = include_bytes!(concat!("../../logic/wasm-dist/lang-runners/", $name));
+                    let wasm =
+                        include_bytes!(concat!("../../logic/wasm-dist/lang-runners/", $name));
                     wasm_from_cache_or_compile(wasm)
                         .expect(concat!("couldn't compile wasm module ", $name))
                 });
@@ -599,10 +602,7 @@ fn parse_published_ident(s: &str) -> Option<(Option<&str>, &str)> {
 }
 
 fn turn_cb(turn_state: &logic::CallbackInput) {
-    println!(
-        "After turn {}:\n",
-        turn_state.state.turn
-    );
+    println!("After turn {}:\n", turn_state.state.turn);
     display::display_state(&turn_state.state.state);
     for (team, logs) in &turn_state.logs {
         if !logs.is_empty() {
