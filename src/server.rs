@@ -132,11 +132,11 @@ async fn run(
             params.turns,
         )
         .await;
-        tx.send(warp::sse::json(serde_json::json!({
+        // we don't really care if it's successful or not; we're done anyways
+        let _ = tx.send(warp::sse::json(serde_json::json!({
             "type": "getOutput",
             "data": output,
-        })))
-        .ok();
+        })));
         drop(tx)
     });
     // so that it doesn't print a panic message

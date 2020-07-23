@@ -132,7 +132,7 @@ pub enum Runner {
 
 #[async_trait::async_trait]
 impl RobotRunner for Runner {
-    async fn run(&mut self, input: logic::ProgramInput) -> logic::RunnerResult {
+    async fn run(&mut self, input: logic::ProgramInput) -> logic::ProgramResult {
         match self {
             Self::Command(r) => r.run(input).await,
             Self::Wasi(r, _) => r.run(input).await,
@@ -160,9 +160,17 @@ impl Runner {
             .instantiate(&imports)
             .map_err(|_| anyhow!("error instantiating wasm module"))?;
         let mut proc = WasiProcess::new(instance);
+
         let stdin = io::BufWriter::new(proc.stdin.take().unwrap());
         let stdout = io::BufReader::new(proc.stdout.take().unwrap());
+
+        // forward wasi stderr to io::stderr
+        let mut proc_stderr = io::BufReader::new(proc.stderr.take().unwrap());
+        let mut stderr = tokio::io::stderr();
+        tokio::spawn(async move { tokio::io::copy(&mut proc_stderr, &mut stderr).await });
+
         proc.spawn();
+
         Ok(TokioRunner::new(stdin, stdout)
             .await
             .map(|r| Self::Wasi(r, dir)))

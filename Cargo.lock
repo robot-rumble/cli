@@ -2636,9 +2636,9 @@ checksum = "cccddf32554fecc6acb585f82a32a72e28b48f8c4c1883ddfeeeaa96f7d8e519"
 
 [[package]]
 name = "wasi-process"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "79987a08ee4d350efbd3c8cee68c1cd5c56652505e57649348d3689af041e6fa"
+checksum = "9e13aec7600380babfc3c610c68751790aa06ef8e2ddecc532f0a424e843c0bd"
 dependencies = [
  "futures",
  "pin-project-lite",
@@ -2719,9 +2719,9 @@ checksum = "a91c2916119c17a8e316507afaaa2dd94b47646048014bbdf6bef098c1bb58ad"
 
 [[package]]
 name = "wasmer-clif-backend"
-version = "0.17.0"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "691ea323652d540a10722066dbf049936f4367bb22a96f8992a262a942a8b11b"
+checksum = "5a2fae69b1c7429316cad6743f3d2ca83cf8957924c477c5a4eff036ec0097a9"
 dependencies = [
  "byteorder",
  "cranelift-codegen",
@@ -2771,9 +2771,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-runtime"
-version = "0.17.0"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "30259003902716aa4fb86fd66a2de555116adef545cbc5ab70afb74e74b44fc3"
+checksum = "c92a9ae96b193c35c47fc829265198322cf980edc353a9de32bc87a1545d44f3"
 dependencies = [
  "lazy_static",
  "memmap",
@@ -2785,9 +2785,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-runtime-core"
-version = "0.17.0"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "45d4253f097502423d8b19d54cb18745f61b984b9dbce32424cba7945cfef367"
+checksum = "740161245998752cf1a567e860fd6355df0336fedca6be1940ec7aaa59643220"
 dependencies = [
  "bincode",
  "blake3",
@@ -2834,9 +2834,9 @@ dependencies = [
 
 [[package]]
 name = "wasmer-win-exception-handler"
-version = "0.17.0"
+version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cf22ce6dc66d893099aac853d451bf9443fa8f5443f5bf4fc63f3aebd7b592b1"
+checksum = "1cd39f3b2bd7964b28ea6f944a7eaa445cfbc91c4f2695d188103f2689bb37d9"
 dependencies = [
  "cc",
  "libc",
