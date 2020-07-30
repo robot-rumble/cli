@@ -393,7 +393,6 @@ fn robot_name_from_path(path: &Path) -> anyhow::Result<&str> {
 }
 
 #[derive(Clone, Copy, strum::EnumString, strum::AsRefStr)]
-#[strum(serialize_all = "UPPERCASE")]
 pub enum Lang {
     Python,
     Javascript,
