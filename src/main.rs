@@ -76,28 +76,33 @@ enum Rumblebot {
         #[structopt(short, long, env = "PORT")]
         port: Option<u16>,
     },
+    /// Login to robotrumble.org. This allows you to use the rumblebot account commands.
     Login {
         username: String,
         #[structopt(short)]
         password: Option<String>,
     },
     Logout {},
+    /// Create a new robot. By default, `name` and `lang` are inferred from the file path.
     Create {
         #[structopt(parse(from_os_str))]
-        robot: PathBuf,
+        file: PathBuf,
         #[structopt(long, short)]
         name: Option<String>,
         #[structopt(long, short)]
         lang: Option<Lang>,
     },
+    /// Update a robot's code. By default, `name` is inferred from the file path.
     Update {
         #[structopt(parse(from_os_str))]
-        robot: PathBuf,
+        file: PathBuf,
         #[structopt(long, short)]
         name: Option<String>,
     },
+    /// Download any published robot from robotrumble.org.
     Download {
-        robot: String,
+        /// Should take the form `$USER/$ROBOT`.
+        slug: String,
         dest: Option<PathBuf>,
     },
 }
@@ -309,6 +314,7 @@ async fn try_main() -> anyhow::Result<()> {
                 },
             )
             .context("Error storing configuration with auth_key")?;
+            println!("Loggeed in!")
         }
         Rumblebot::Logout {} => {
             confy::store(
@@ -319,29 +325,31 @@ async fn try_main() -> anyhow::Result<()> {
                 },
             )
             .context("Error storing configuration with auth_key")?;
+            println!("Logged out!")
         }
-        Rumblebot::Create { robot, name, lang } => {
-            let code = fs::read_to_string(&robot)
-                .with_context(|| format!("Couldn't read {}", robot.display()))?;
+        Rumblebot::Create { file, name, lang } => {
+            let code = fs::read_to_string(&file)
+                .with_context(|| format!("Couldn't read {}", file.display()))?;
             let name = match name {
                 Some(ref n) => n,
-                None => robot_name_from_path(&robot)?,
+                None => robot_name_from_path(&file)?,
             };
             let lang = match lang {
                 Some(l) => l,
-                None => robot.extension().and_then(Lang::from_ext).ok_or_else(|| {
+                None => file.extension().and_then(Lang::from_ext).ok_or_else(|| {
                     anyhow!("Invalid language from extension, try passing the -l option")
                 })?,
             };
             let info = api::create(lang, name).await?;
             api::update_code(info.id, &code).await?;
+            println!("Robot {} created!", name)
         }
-        Rumblebot::Update { robot, name } => {
-            let code = fs::read_to_string(&robot)
-                .with_context(|| format!("Couldn't read {}", robot.display()))?;
+        Rumblebot::Update { file, name } => {
+            let code = fs::read_to_string(&file)
+                .with_context(|| format!("Couldn't read {}", file.display()))?;
             let name = match name {
                 Some(ref n) => n,
-                None => robot_name_from_path(&robot)?,
+                None => robot_name_from_path(&file)?,
             };
             let (user, _) = api::whoami().await?;
             let info = api::robot_info(&user, name).await?.ok_or_else(|| {
@@ -351,10 +359,11 @@ async fn try_main() -> anyhow::Result<()> {
                 )
             })?;
             api::update_code(info.id, &code).await?;
+            println!("Robot {} updated!", name)
         }
-        Rumblebot::Download { robot, dest } => {
-            let (user, robot) = parse_published_ident(&robot)
-                .ok_or_else(|| anyhow!("invalid robot ident '{}'", robot))?;
+        Rumblebot::Download { slug, dest } => {
+            let (user, robot) = parse_published_slug(&slug)
+                .ok_or_else(|| anyhow!("invalid robot slug '{}'", slug))?;
             let whoami;
             let user = match user {
                 Some(u) => u,
@@ -370,7 +379,8 @@ async fn try_main() -> anyhow::Result<()> {
                 .await?
                 .ok_or_else(|| anyhow!("robot {} has no code", robot))?;
             let dest = dest.unwrap_or_else(|| format!("{}.{}", robot, info.lang.ext()).into());
-            fs::write(dest, code)?;
+            fs::write(dest.clone(), code)?;
+            println!("Robot {} is downloaded and placed into {}", slug, dest.display());
         }
     }
 
@@ -576,7 +586,7 @@ impl RobotId {
         s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     }
     fn from_published(s: &str) -> Option<Self> {
-        parse_published_ident(s).and_then(|(user, robot)| {
+        parse_published_slug(s).and_then(|(user, robot)| {
             user.map(|user| Self::Published {
                 user: user.to_owned(),
                 robot: robot.to_owned(),
@@ -592,7 +602,7 @@ impl RobotId {
     }
 }
 
-fn parse_published_ident(s: &str) -> Option<(Option<&str>, &str)> {
+fn parse_published_slug(s: &str) -> Option<(Option<&str>, &str)> {
     let mut spl = s.split('/');
     let a = spl.next()?;
     if !RobotId::valid_ident(a) {
