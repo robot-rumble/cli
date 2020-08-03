@@ -37,6 +37,14 @@ async fn main() {
 #[derive(StructOpt)]
 #[structopt(name = "Robot Runner CLI", author)]
 enum Rumblebot {
+    /// Commands for running battles locally
+    Run(Run),
+    /// Commands for interacting with robotrumble.org
+    Account(Account)
+}
+
+#[derive(StructOpt)]
+enum Run {
     /// Run a battle and print the results in the terminal.
     ///
     /// A robot is specified in one of the following ways:
@@ -49,7 +57,7 @@ enum Rumblebot {
     ///     each one with a `ProgramOutput` json object followed by a newline. The match is over when stdin is closed, and
     ///     the process may be forcefully terminated after that.
     #[structopt(verbatim_doc_comment)]
-    Run {
+    Term {
         #[structopt(parse(from_os_str))]
         robot1: OsString,
         #[structopt(parse(from_os_str))]
@@ -64,7 +72,7 @@ enum Rumblebot {
     /// Run a battle and show the results in the normal web display.
     ///
     /// For instructions on how to specify robots, see the help page for `run`.
-    WebRun {
+    Web {
         /// The robots to make available to the web display. The first one will be treated as the main robot,
         /// and the rest will be available for choosing from the UI.
         #[structopt(parse(from_os_str), required = true, min_values = 2)]
@@ -76,6 +84,10 @@ enum Rumblebot {
         #[structopt(short, long, env = "PORT")]
         port: Option<u16>,
     },
+}
+
+#[derive(StructOpt)]
+enum Account {
     /// Login to robotrumble.org. This allows you to use the rumblebot account commands.
     Login {
         username: String,
@@ -249,138 +261,143 @@ async fn try_main() -> anyhow::Result<()> {
         .context("Unable to load config")?;
 
     match opt {
-        Rumblebot::Run {
-            robot1,
-            robot2,
-            turns,
-            raw,
-        } => {
-            let get_runner = |id| async move {
-                let id = RobotId::parse(id).context("Couldn't parse robot identifier")?;
-                let runner = Runner::from_id(&id).await?;
-                Ok::<_, anyhow::Error>(runner)
-            };
-            let (r1, r2) = tokio::try_join!(get_runner(&robot1), get_runner(&robot2))?;
-            let runners = maplit::hashmap! {
-                logic::Team::Blue => r1,
-                logic::Team::Red => r2,
-            };
-            let output = logic::run(
-                runners,
-                |turn_state| {
-                    if !raw {
-                        turn_cb(turn_state)
-                    }
-                },
+        Rumblebot::Run(run_opt) => match run_opt {
+            Run::Term {
+                robot1,
+                robot2,
                 turns,
-            )
-            .await;
-            if raw {
-                let stdout = std::io::stdout();
-                serde_json::to_writer(stdout.lock(), &output).unwrap();
-            } else {
-                if !output.errors.is_empty() {
-                    println!("Errors: {:?}", output.errors)
-                } else if let Some(w) = output.winner {
-                    println!("Done! {:?} won", w);
+                raw,
+            } => {
+                let get_runner = |id| async move {
+                    let id = RobotId::parse(id).context("Couldn't parse robot identifier")?;
+                    let runner = Runner::from_id(&id).await?;
+                    Ok::<_, anyhow::Error>(runner)
+                };
+                let (r1, r2) = tokio::try_join!(get_runner(&robot1), get_runner(&robot2))?;
+                let runners = maplit::hashmap! {
+                    logic::Team::Blue => r1,
+                    logic::Team::Red => r2,
+                };
+                let output = logic::run(
+                    runners,
+                    |turn_state| {
+                        if !raw {
+                            turn_cb(turn_state)
+                        }
+                    },
+                    turns,
+                )
+                    .await;
+                if raw {
+                    let stdout = std::io::stdout();
+                    serde_json::to_writer(stdout.lock(), &output).unwrap();
                 } else {
-                    println!("Done! nobody won");
+                    if !output.errors.is_empty() {
+                        println!("Errors: {:?}", output.errors)
+                    } else if let Some(w) = output.winner {
+                        println!("Done! {:?} won", w);
+                    } else {
+                        println!("Done! nobody won");
+                    }
                 }
             }
-        }
-        Rumblebot::WebRun {
-            robots,
-            address,
-            port,
-        } => {
-            let ids = robots
-                .iter()
-                .map(|id| RobotId::parse(id))
-                .collect::<Result<Vec<_>, _>>()?;
-            server::serve(ids, address, port).await?;
-        }
-        Rumblebot::Login { username, password } => {
-            let password = match password {
-                Some(pass) => pass,
-                None => rpassword::read_password_from_tty(Some("Password: "))
-                    .context("Error reading password (try passing the -p option)")?,
-            };
-            let auth_key = api::authenticate(&username, &password).await?;
-            confy::store(
-                XDG_NAME,
-                Config {
-                    auth_key: Some(auth_key),
-                    ..config().clone()
-                },
-            )
-            .context("Error storing configuration with auth_key")?;
-            println!("Loggeed in!")
-        }
-        Rumblebot::Logout {} => {
-            confy::store(
-                XDG_NAME,
-                Config {
-                    auth_key: None,
-                    ..config().clone()
-                },
-            )
-            .context("Error storing configuration with auth_key")?;
-            println!("Logged out!")
-        }
-        Rumblebot::Create { file, name, lang } => {
-            let code = fs::read_to_string(&file)
-                .with_context(|| format!("Couldn't read {}", file.display()))?;
-            let name = match name {
-                Some(ref n) => n,
-                None => robot_name_from_path(&file)?,
-            };
-            let lang = match lang {
-                Some(l) => l,
-                None => file.extension().and_then(Lang::from_ext).ok_or_else(|| {
-                    anyhow!("Invalid language from extension, try passing the -l option")
-                })?,
-            };
-            let info = api::create(lang, name).await?;
-            api::update_code(info.id, &code).await?;
-            println!("Robot {} created!", name)
-        }
-        Rumblebot::Update { file, name } => {
-            let code = fs::read_to_string(&file)
-                .with_context(|| format!("Couldn't read {}", file.display()))?;
-            let name = match name {
-                Some(ref n) => n,
-                None => robot_name_from_path(&file)?,
-            };
-            let (user, _) = api::whoami().await?;
-            let info = api::robot_info(&user, name).await?.ok_or_else(|| {
-                anyhow!(
-                    "No existing robot of yours with name '{}'. try the `create` subcommand instead",
-                    name
+            Run::Web {
+                robots,
+                address,
+                port,
+            } => {
+                let ids = robots
+                    .iter()
+                    .map(|id| RobotId::parse(id))
+                    .collect::<Result<Vec<_>, _>>()?;
+                server::serve(ids, address, port).await?;
+            }
+        },
+        
+        Rumblebot::Account(account_opt) => match account_opt {
+            Account::Login { username, password } => {
+                let password = match password {
+                    Some(pass) => pass,
+                    None => rpassword::read_password_from_tty(Some("Password: "))
+                        .context("Error reading password (try passing the -p option)")?,
+                };
+                let auth_key = api::authenticate(&username, &password).await?;
+                confy::store(
+                    XDG_NAME,
+                    Config {
+                        auth_key: Some(auth_key),
+                        ..config().clone()
+                    },
                 )
-            })?;
-            api::update_code(info.id, &code).await?;
-            println!("Robot {} updated!", name)
-        }
-        Rumblebot::Download { slug, dest } => {
-            let (user, robot) = parse_published_slug(&slug)
-                .ok_or_else(|| anyhow!("invalid robot slug '{}'", slug))?;
-            let whoami;
-            let user = match user {
-                Some(u) => u,
-                None => {
-                    whoami = api::whoami().await?.0;
-                    &whoami
-                }
-            };
-            let info = api::robot_info(user, robot)
-                .await?
-                .ok_or_else(|| anyhow!("robot {} not found", robot))?;
-            let code = api::robot_code(info.id)
-                .await?
-                .ok_or_else(|| anyhow!("robot {} has no code", robot))?;
-            let dest = dest.unwrap_or_else(|| format!("{}.{}", robot, info.lang.ext()).into());
-            fs::write(dest.clone(), code)?;
-            println!("Robot {} is downloaded and placed into {}", slug, dest.display());
+                    .context("Error storing configuration with auth_key")?;
+                println!("Loggeed in!")
+            }
+            Account::Logout {} => {
+                confy::store(
+                    XDG_NAME,
+                    Config {
+                        auth_key: None,
+                        ..config().clone()
+                    },
+                )
+                    .context("Error storing configuration with auth_key")?;
+                println!("Logged out!")
+            }
+            Account::Create { file, name, lang } => {
+                let code = fs::read_to_string(&file)
+                    .with_context(|| format!("Couldn't read {}", file.display()))?;
+                let name = match name {
+                    Some(ref n) => n,
+                    None => robot_name_from_path(&file)?,
+                };
+                let lang = match lang {
+                    Some(l) => l,
+                    None => file.extension().and_then(Lang::from_ext).ok_or_else(|| {
+                        anyhow!("Invalid language from extension, try passing the -l option")
+                    })?,
+                };
+                let info = api::create(lang, name).await?;
+                api::update_code(info.id, &code).await?;
+                println!("Robot {} created!", name)
+            }
+            Account::Update { file, name } => {
+                let code = fs::read_to_string(&file)
+                    .with_context(|| format!("Couldn't read {}", file.display()))?;
+                let name = match name {
+                    Some(ref n) => n,
+                    None => robot_name_from_path(&file)?,
+                };
+                let (user, _) = api::whoami().await?;
+                let info = api::robot_info(&user, name).await?.ok_or_else(|| {
+                    anyhow!(
+                        "No existing robot of yours with name '{}'. try the `create` subcommand instead",
+                        name
+                    )
+                })?;
+                api::update_code(info.id, &code).await?;
+                println!("Robot {} updated!", name)
+            }
+            Account::Download { slug, dest } => {
+                let (user, robot) = parse_published_slug(&slug)
+                    .ok_or_else(|| anyhow!("invalid robot slug '{}'", slug))?;
+                let whoami;
+                let user = match user {
+                    Some(u) => u,
+                    None => {
+                        whoami = api::whoami().await?.0;
+                        &whoami
+                    }
+                };
+                let info = api::robot_info(user, robot)
+                    .await?
+                    .ok_or_else(|| anyhow!("robot {} not found", robot))?;
+                let code = api::robot_code(info.id)
+                    .await?
+                    .ok_or_else(|| anyhow!("robot {} has no code", robot))?;
+                let dest = dest.unwrap_or_else(|| format!("{}.{}", robot, info.lang.ext()).into());
+                fs::write(dest.clone(), code)?;
+                println!("Robot {} is downloaded and placed into {}", slug, dest.display());
+            }
         }
     }
 
