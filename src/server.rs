@@ -117,10 +117,13 @@ async fn run(
                 .map(|res| res.unwrap_or_else(|err| Err(logic::ProgramError::IO(err.to_string()))))
         };
         let (r1, r2) = tokio::join!(make_runner(&r1), make_runner(&r2));
+        let runners = maplit::hashmap! {
+            logic::Team::Blue => r1,
+            logic::Team::Red => r2,
+        };
         let tx = tx;
         let output = logic::run(
-            r1,
-            r2,
+            runners,
             |inp| {
                 tx.send(warp::sse::json(serde_json::json!({
                     "type": "getProgress",

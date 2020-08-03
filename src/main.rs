@@ -256,9 +256,12 @@ async fn try_main() -> anyhow::Result<()> {
                 Ok::<_, anyhow::Error>(runner)
             };
             let (r1, r2) = tokio::try_join!(get_runner(&robot1), get_runner(&robot2))?;
+            let runners = maplit::hashmap! {
+                logic::Team::Blue => r1,
+                logic::Team::Red => r2,
+            };
             let output = logic::run(
-                r1,
-                r2,
+                runners,
                 |turn_state| {
                     if !raw {
                         turn_cb(turn_state)

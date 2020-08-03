@@ -1080,8 +1080,6 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "futures-util",
- "itertools",
- "maplit",
  "multimap",
  "rand 0.7.3",
  "serde",
@@ -1886,6 +1884,7 @@ dependencies = [
  "futures-util",
  "itertools",
  "logic",
+ "maplit",
  "native-runner",
  "once_cell",
  "openssl-sys",
