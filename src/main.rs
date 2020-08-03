@@ -35,7 +35,7 @@ async fn main() {
 }
 
 #[derive(StructOpt)]
-#[structopt(name = "Robot Runner CLI", author)]
+#[structopt(name = "Robot Runner CLI", author, setting = clap::AppSettings::DeriveDisplayOrder)]
 enum Rumblebot {
     /// Commands for running battles locally
     Run(Run),
@@ -44,6 +44,7 @@ enum Rumblebot {
 }
 
 #[derive(StructOpt)]
+#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 enum Run {
     /// Run a battle and print the results in the terminal.
     ///
@@ -87,6 +88,7 @@ enum Run {
 }
 
 #[derive(StructOpt)]
+#[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 enum Account {
     /// Login to robotrumble.org. This allows you to use the rumblebot account commands.
     Login {
