@@ -606,7 +606,7 @@ impl RobotId {
         }
     }
     fn valid_ident(s: &str) -> bool {
-        s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
     }
     fn from_published(s: &str) -> Option<Self> {
         parse_published_slug(s).and_then(|(user, robot)| {
@@ -632,6 +632,9 @@ fn parse_published_slug(s: &str) -> Option<(Option<&str>, &str)> {
         return None;
     }
     let b = spl.next();
+    if spl.next().is_some() {
+        return None;
+    }
     let ret = match b {
         Some(robot) => {
             if !RobotId::valid_ident(robot) {
