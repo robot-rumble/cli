@@ -40,7 +40,7 @@ enum Rumblebot {
     /// Commands for running battles locally
     Run(Run),
     /// Commands for interacting with robotrumble.org
-    Account(Account)
+    Account(Account),
 }
 
 #[derive(StructOpt)]
@@ -289,7 +289,7 @@ async fn try_main() -> anyhow::Result<()> {
                     },
                     turns,
                 )
-                    .await;
+                .await;
                 if raw {
                     let stdout = std::io::stdout();
                     serde_json::to_writer(stdout.lock(), &output).unwrap();
@@ -315,7 +315,7 @@ async fn try_main() -> anyhow::Result<()> {
                 server::serve(ids, address, port).await?;
             }
         },
-        
+
         Rumblebot::Account(account_opt) => match account_opt {
             Account::Login { username, password } => {
                 let password = match password {
@@ -331,7 +331,7 @@ async fn try_main() -> anyhow::Result<()> {
                         ..config().clone()
                     },
                 )
-                    .context("Error storing configuration with auth_key")?;
+                .context("Error storing configuration with auth_key")?;
                 println!("Loggeed in!")
             }
             Account::Logout {} => {
@@ -342,7 +342,7 @@ async fn try_main() -> anyhow::Result<()> {
                         ..config().clone()
                     },
                 )
-                    .context("Error storing configuration with auth_key")?;
+                .context("Error storing configuration with auth_key")?;
                 println!("Logged out!")
             }
             Account::Create { file, name, lang } => {
@@ -398,9 +398,13 @@ async fn try_main() -> anyhow::Result<()> {
                     .ok_or_else(|| anyhow!("robot {} has no code", robot))?;
                 let dest = dest.unwrap_or_else(|| format!("{}.{}", robot, info.lang.ext()).into());
                 fs::write(dest.clone(), code)?;
-                println!("Robot {} is downloaded and placed into {}", slug, dest.display());
+                println!(
+                    "Robot {} is downloaded and placed into {}",
+                    slug,
+                    dest.display()
+                );
             }
-        }
+        },
     }
 
     Ok(())
