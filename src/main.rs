@@ -64,8 +64,8 @@ enum Run {
         #[structopt(parse(from_os_str))]
         robot2: OsString,
         /// The number of turns to run in the match
-        #[structopt(short, long, default_value = "10")]
-        turns: usize,
+        #[structopt(short, long, default_value = "100")]
+        turn_num: usize,
         /// Avoid printing human-friendly info and just output JSON
         #[structopt(long)]
         raw: bool,
@@ -267,7 +267,7 @@ async fn try_main() -> anyhow::Result<()> {
             Run::Term {
                 robot1,
                 robot2,
-                turns,
+                turn_num,
                 raw,
             } => {
                 let get_runner = |id| async move {
@@ -287,7 +287,7 @@ async fn try_main() -> anyhow::Result<()> {
                             turn_cb(turn_state)
                         }
                     },
-                    turns,
+                    turn_num
                 )
                 .await;
                 if raw {
