@@ -1,9 +1,9 @@
 use colored::*;
-use logic::{GridMap2D, ObjDetails, State, Team};
+use logic::{GridMap2D, ObjDetails, Team, StateForOutput, GridMap};
 
-pub fn display_state(state: &State) {
-    print!("\n");
-    for row in GridMap2D::from(state.grid.clone()) {
+pub fn display_state(state: &StateForOutput) {
+    let grid_map: GridMap = state.objs.clone().into();
+    for row in GridMap2D::from(grid_map) {
         for col in row {
             let s = match col {
                 Some(id) => {
