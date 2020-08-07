@@ -17,6 +17,16 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
+      - id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          draft: false
+          prerelease: false
+
       - uses: actions/cache@v2
         with:
           path: ~/.cargo
@@ -49,16 +59,6 @@ jobs:
           cp target/release/rumblebot dist
 
       - run: 7z a dist.zip ./dist/*
-
-      - id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          draft: false
-          prerelease: false
 
       - uses: actions/upload-release-asset@v1
         env:
