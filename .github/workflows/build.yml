@@ -3,23 +3,12 @@ on:
     tags:
       - 'v*'
 
-env:
-  CARGO_TERM_COLOR: always
-
 jobs:
   build:
-    runs-on: ${{ matrix.os }}-latest
-
-    strategy:
-      matrix:
-        os: [ubuntu, macos, windows]
+    runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-
-      - if: matrix.os == 'ubuntu'
-        id: create_release
-        uses: actions/create-release@v1
+      - uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -28,51 +17,3 @@ jobs:
           draft: false
           prerelease: false
 
-      - if: matrix.os == 'windows' || matrix.os == 'macos'
-        id: create_release
-        uses: bruceadams/get-release@v1.2.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-      - uses: actions/cache@v2
-        with:
-          path: ~/.cargo
-          key: cargo-${{ matrix.os }}-${{ hashFiles('Cargo.lock') }}
-      - uses: actions/cache@v2
-        with:
-          path: target
-          key: build-${{ matrix.os }}
-
-      - uses: aws-actions/configure-aws-credentials@v1
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: us-east-1
-
-      - run: git clone https://github.com/robot-rumble/logic ../logic
-      - run: aws s3 sync s3://${{ secrets.S3_BUCKET_PUBLIC }}/lang-runners ../logic/wasm-dist/lang-runners
-      - run: aws s3 sync s3://${{ secrets.S3_BUCKET_BUILD }}/cli-assets dist
-
-      - run: cargo build --release --all-features
-
-      - if: matrix.os == 'windows'
-        run: |
-          mkdir dist
-          cp -Path target/release/rumblebot.exe -Destination dist
-
-      - if: matrix.os == 'macos' || matrix.os == 'ubuntu'
-        run: |
-          mkdir dist
-          cp target/release/rumblebot dist
-
-      - run: 7z a dist.zip ./dist/*
-
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: dist.zip
-          asset_name: rumblebot-${{ matrix.os }}.zip
-          asset_content_type: application/zip
