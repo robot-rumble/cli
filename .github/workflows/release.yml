@@ -44,20 +44,20 @@ jobs:
 
       - if: matrix.os == 'windows'
         run: |
-          mkdir dist
-          cp -Path target/release/rumblebot.exe -Destination dist
+          mkdir release
+          cp -Path target/release/rumblebot.exe -Destination release
 
       - if: matrix.os == 'macos' || matrix.os == 'ubuntu'
         run: |
-          mkdir dist
-          cp target/release/rumblebot dist
+          mkdir release
+          cp target/release/rumblebot release
 
-      - run: 7z a dist.zip ./dist/*
+      - run: 7z a release.zip ./release/*
       - uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: dist.zip
+          asset_path: release.zip
           asset_name: rumblebot-${{ matrix.os }}.zip
           asset_content_type: application/zip
