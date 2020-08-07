@@ -38,32 +38,33 @@ jobs:
 
       - run: cargo build --release --all-features
 
+      - if: matrix.os == 'windows'
+        run: |
+          mkdir dist
+          cp -Path target/release/rumblebot.exe -Destination dist
+
+      - if: matrix.os == 'macos' || matrix.os == 'ubuntu'
+        run: |
+          mkdir dist
+          cp target/release/rumblebot dist
+
+      - run: 7z a dist.zip ./dist/*
+
       - id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}-${{ matrix.os }}
-          release_name: ${{ matrix.os }} release ${{ github.ref }}
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
           draft: false
           prerelease: false
 
-      - if: matrix.os == 'windows'
-        uses: actions/upload-release-asset@v1
+      - uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: target/release/rumblebot.exe
-          asset_name: rumblebot.exe
-          asset_content_type: application/vnd.microsoft.portable-executable
-
-      - if: matrix.os == 'macos' || matrix.os == 'ubuntu'
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: target/release/rumblebot
-          asset_name: rumblebot-${{ matrix.os }}
-          asset_content_type: application/octet-stream
+          asset_path: dist.zip
+          asset_name: rumblebot-${{ matrix.os }}.zip
+          asset_content_type: application/zip
