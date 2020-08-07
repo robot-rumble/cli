@@ -46,11 +46,13 @@ jobs:
         run: |
           mkdir release
           cp -Path target/release/rumblebot.exe -Destination release
+          cp -Path README.md -Destination release
 
       - if: matrix.os == 'macos' || matrix.os == 'ubuntu'
         run: |
           mkdir release
           cp target/release/rumblebot release
+          cp README.md release
 
       - run: 7z a release.zip ./release/*
       - uses: actions/upload-release-asset@v1
