@@ -17,7 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - id: create_release
+      - if: matrix.os == 'ubuntu'
+        id: create_release
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -26,6 +27,13 @@ jobs:
           release_name: ${{ github.ref }}
           draft: false
           prerelease: false
+
+      - if: matrix.os == 'windows' || matrix.os == 'macos'
+        id: create_release
+        uses: bruceadams/get-release@v1.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
       - uses: actions/cache@v2
         with:
