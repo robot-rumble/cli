@@ -10,9 +10,12 @@ pub fn display_state(state: &StateForOutput) {
                     let obj = state.objs.get(&id).unwrap();
                     match &obj.1 {
                         ObjDetails::Terrain(_) => "■".white(),
-                        ObjDetails::Unit(unit) => match unit.team {
-                            Team::Red => "r".white().on_red(),
-                            Team::Blue => "b".white().on_blue(),
+                        ObjDetails::Unit(unit) => {
+                            let health = unit.health.to_string();
+                            match unit.team {
+                                Team::Red => health.red(),
+                                Team::Blue => health.blue()
+                            }
                         },
                     }
                 }
