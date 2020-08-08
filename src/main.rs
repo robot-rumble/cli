@@ -606,7 +606,7 @@ impl RobotId {
         }
     }
     fn valid_ident(s: &str) -> bool {
-        !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     }
     fn from_published(s: &str) -> Option<Self> {
         parse_published_slug(s).and_then(|(user, robot)| {
