@@ -239,15 +239,15 @@ impl Runner {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Default, Debug, Clone)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
 struct Config {
-    #[serde(default)]
     auth_key: Option<String>,
-    #[serde(default = "default_base_url")]
     base_url: Cow<'static, str>,
 }
-fn default_base_url() -> Cow<'static, str> {
-    "https://robotrumble.org".into()
+impl Default for Config {
+    fn default() -> Self {
+        Self { auth_key: None, base_url: "https://robotrumble.org".into() }
+    }
 }
 static CONFIG: OnceCell<Config> = OnceCell::new();
 fn config() -> &'static Config {
