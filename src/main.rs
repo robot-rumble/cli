@@ -332,7 +332,7 @@ async fn try_main() -> anyhow::Result<()> {
                     },
                 )
                 .context("Error storing configuration with auth_key")?;
-                println!("Loggeed in!")
+                println!("Logged in!")
             }
             Account::Logout {} => {
                 confy::store(
