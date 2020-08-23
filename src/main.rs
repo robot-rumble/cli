@@ -239,7 +239,7 @@ impl Runner {
     }
 }
 
-const PROD_BASE_URL: &str = "https://robotrumble.org".into();
+const PROD_BASE_URL: &str = "https://robotrumble.org";
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
 struct Config {
