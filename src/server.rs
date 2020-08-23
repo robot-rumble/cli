@@ -54,12 +54,16 @@ pub async fn serve(ids: Vec<RobotId>, address: String, port: Option<u16>) -> any
                                 "name": format!("{} / {}", user, robot),
                                 "rating": 0,
                                 "lang": "n/a",
+                                "published": true,
                             })
                         })
                         .collect_vec(),
                 )
             }))
-        .or(static_dir::static_dir!("dist"));
+        .or(warp::filters::fs::dir(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/dist"
+        )));
 
     let server = warp::serve(route);
 

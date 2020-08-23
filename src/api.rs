@@ -5,7 +5,7 @@ use reqwest::{header, Client, StatusCode, Url};
 use super::Lang;
 
 fn base_url() -> anyhow::Result<Url> {
-    Url::parse(&super::config().base_url).context("Invalid base url")
+    Url::parse(super::config().base_url()).context("Invalid base url")
 }
 macro_rules! build_url {
     ($($segment:tt)/+) => {{

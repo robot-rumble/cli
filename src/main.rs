@@ -239,16 +239,19 @@ impl Runner {
     }
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, Clone)]
+const PROD_BASE_URL: &str = "https://robotrumble.org".into();
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, Clone, Default)]
 struct Config {
     auth_key: Option<String>,
-    base_url: Cow<'static, str>,
+    base_url: Option<Cow<'static, str>>,
 }
-impl Default for Config {
-    fn default() -> Self {
-        Self { auth_key: None, base_url: "https://robotrumble.org".into() }
+impl Config {
+    fn base_url(&self) -> &str {
+        self.base_url.as_deref().unwrap_or(PROD_BASE_URL)
     }
 }
+
 static CONFIG: OnceCell<Config> = OnceCell::new();
 fn config() -> &'static Config {
     CONFIG.get().unwrap()
@@ -287,7 +290,7 @@ async fn try_main() -> anyhow::Result<()> {
                             turn_cb(turn_state)
                         }
                     },
-                    turn_num
+                    turn_num,
                 )
                 .await;
                 if raw {
@@ -606,7 +609,9 @@ impl RobotId {
         }
     }
     fn valid_ident(s: &str) -> bool {
-        !s.is_empty() && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-')
     }
     fn from_published(s: &str) -> Option<Self> {
         parse_published_slug(s).and_then(|(user, robot)| {
