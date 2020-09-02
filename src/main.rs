@@ -151,7 +151,7 @@ pub enum Runner {
 
 #[async_trait::async_trait]
 impl RobotRunner for Runner {
-    async fn run(&mut self, input: logic::ProgramInput) -> logic::ProgramResult {
+    async fn run(&mut self, input: logic::ProgramInput<'_>) -> logic::ProgramResult {
         match self {
             Self::Command(r) => r.run(input).await,
             Self::Wasi(r, _) => r.run(input).await,

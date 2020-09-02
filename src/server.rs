@@ -60,10 +60,7 @@ pub async fn serve(ids: Vec<RobotId>, address: String, port: Option<u16>) -> any
                         .collect_vec(),
                 )
             }))
-        .or(warp::filters::fs::dir(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/dist"
-        )));
+        .or(static_dir::static_dir!("dist"));
 
     let server = warp::serve(route);
 
