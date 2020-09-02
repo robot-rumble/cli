@@ -118,7 +118,7 @@ async fn run(
                 .map(|res| res.unwrap_or_else(|err| Err(logic::ProgramError::IO(err.to_string()))))
         };
         let (r1, r2) = tokio::join!(make_runner(&r1), make_runner(&r2));
-        let runners = maplit::hashmap! {
+        let runners = maplit::btreemap! {
             logic::Team::Blue => r1,
             logic::Team::Red => r2,
         };
