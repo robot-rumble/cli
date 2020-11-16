@@ -505,6 +505,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "env_logger"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54532e3223c5af90a6a757c90b5c5521564b07e5e7a958681bcd2afad421cdcd"
+dependencies = [
+ "log 0.4.8",
+]
+
+[[package]]
 name = "erased-serde"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1892,8 +1901,10 @@ dependencies = [
  "colored",
  "confy",
  "dirs-next",
+ "env_logger",
  "futures-util",
  "itertools",
+ "log 0.4.8",
  "logic",
  "maplit",
  "native-runner",

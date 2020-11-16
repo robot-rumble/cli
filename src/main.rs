@@ -3,8 +3,8 @@ use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
-use tokio::io;
 use tokio::process::Command;
+use tokio::{io, time};
 use wasi_process::WasiProcess;
 use wasmer_runtime::{
     cache::{Cache, FileSystemCache, WasmHash},
@@ -25,6 +25,8 @@ mod server;
 
 #[tokio::main]
 async fn main() {
+    env_logger::init();
+
     if let Err(err) = try_main().await {
         eprintln!("ERROR: {}", err);
         err.chain()
@@ -137,29 +139,60 @@ fn make_sourcedir_inline(source: &str) -> anyhow::Result<tempfile::TempDir> {
     Ok(sourcedir)
 }
 
-pub enum Runner {
+type WasiRunner =
+    TokioRunner<io::BufWriter<wasi_process::WasiStdin>, io::BufReader<wasi_process::WasiStdout>>;
+
+enum RunnerKind {
     Command(CommandRunner),
-    Wasi(
-        TokioRunner<
-            io::BufWriter<wasi_process::WasiStdin>,
-            io::BufReader<wasi_process::WasiStdout>,
-        >,
+    Wasi {
+        runner: WasiRunner,
         /// the directory that we store the source file in; we need to keep it open
-        tempfile::TempDir,
-    ),
+        dir: tempfile::TempDir,
+        memory: wasmer_runtime::Memory,
+    },
+}
+
+pub struct Runner {
+    kind: RunnerKind,
+    timeout: Option<(time::Delay, time::Duration)>,
 }
 
 #[async_trait::async_trait]
 impl RobotRunner for Runner {
     async fn run(&mut self, input: logic::ProgramInput<'_>) -> logic::ProgramResult {
-        match self {
-            Self::Command(r) => r.run(input).await,
-            Self::Wasi(r, _) => r.run(input).await,
+        let kind = &mut self.kind;
+        let inner = async move {
+            match kind {
+                RunnerKind::Command(r) => r.run(input).await,
+                RunnerKind::Wasi { runner, memory, .. } => {
+                    log::debug!(
+                        "start of turn {} w/ {} units: {:?} allocated",
+                        input.state.turn,
+                        input.state.objs.len(),
+                        memory.size()
+                    );
+                    runner.run(input).await
+                }
+            }
+        };
+        match &mut self.timeout {
+            Some((timeout, dur)) => {
+                tokio::select! {
+                    res = inner => res,
+                    _ = timeout => Err(logic::ProgramError::Timeout(*dur)),
+                }
+            }
+            None => inner.await,
         }
     }
 }
 
 impl Runner {
+    fn set_timeout(&mut self, dur: time::Duration) {
+        let instant = time::Instant::now() + dur;
+        self.timeout = Some((time::delay_until(instant), dur));
+    }
+
     async fn new_wasm(
         module: &WasmModule,
         version: WasiVersion,
@@ -178,6 +211,7 @@ impl Runner {
         let instance = module
             .instantiate(&imports)
             .map_err(|_| anyhow!("error instantiating wasm module"))?;
+        let memory: wasmer_runtime::Memory = instance.exports.get("memory").unwrap();
         let mut proc = WasiProcess::new(instance);
 
         let stdin = io::BufWriter::new(proc.stdin.take().unwrap());
@@ -190,9 +224,15 @@ impl Runner {
 
         proc.spawn();
 
-        Ok(TokioRunner::new(stdin, stdout)
-            .await
-            .map(|r| Self::Wasi(r, dir)))
+        let program_result = TokioRunner::new(stdin, stdout).await.map(|runner| Self {
+            kind: RunnerKind::Wasi {
+                runner,
+                dir,
+                memory,
+            },
+            timeout: None,
+        });
+        Ok(program_result)
     }
     async fn from_id(id: &RobotId) -> anyhow::Result<logic::ProgramResult<Self>> {
         match id {
@@ -215,7 +255,11 @@ impl Runner {
             RobotId::Command { command, args } => {
                 let mut cmd = Command::new(command);
                 cmd.args(args);
-                Ok(TokioRunner::new_cmd(cmd).await.map(Self::Command))
+                let program_result = TokioRunner::new_cmd(cmd).await.map(|r| Self {
+                    kind: RunnerKind::Command(r),
+                    timeout: None,
+                });
+                Ok(program_result)
             }
             RobotId::LocalRunner {
                 runner,
