@@ -46,7 +46,7 @@ enum Rumblebot {
 #[derive(StructOpt)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 enum Run {
-    /// Run a battle and print the results in the terminal.
+    /// Run a battle and print the results in the terminal
     ///
     /// A robot is specified in one of the following ways:
     /// 1. `$USER/$ROBOT`. A robot published on robotrumble.org
@@ -70,7 +70,7 @@ enum Run {
         #[structopt(long)]
         raw: bool,
     },
-    /// Run a battle and show the results in the normal web display.
+    /// Run a battle and show the results in the normal web display
     ///
     /// For instructions on how to specify robots, see the help page for `run`.
     Web {
@@ -90,14 +90,14 @@ enum Run {
 #[derive(StructOpt)]
 #[structopt(setting = clap::AppSettings::DeriveDisplayOrder)]
 enum Account {
-    /// Login to robotrumble.org. This allows you to use the rumblebot account commands.
+    /// Login to robotrumble.org. This allows you to use the rumblebot account commands
     Login {
         username: String,
         #[structopt(short)]
         password: Option<String>,
     },
     Logout {},
-    /// Create a new robot. By default, `name` and `lang` are inferred from the file path.
+    /// Create a new robot. By default, `name` and `lang` are inferred from the file path
     Create {
         #[structopt(parse(from_os_str))]
         file: PathBuf,
@@ -106,14 +106,14 @@ enum Account {
         #[structopt(long, short)]
         lang: Option<Lang>,
     },
-    /// Update a robot's code. By default, `name` is inferred from the file path.
+    /// Update a robot's code. By default, `name` is inferred from the file path
     Update {
         #[structopt(parse(from_os_str))]
         file: PathBuf,
         #[structopt(long, short)]
         name: Option<String>,
     },
-    /// Download any published robot from robotrumble.org.
+    /// Download any published robot from robotrumble.org
     Download {
         /// Should take the form `$USER/$ROBOT`.
         slug: String,
