@@ -4,8 +4,9 @@ use futures_util::{FutureExt, StreamExt};
 use itertools::Itertools;
 use owning_ref::OwningRef;
 use std::sync::Arc;
-use tokio::sync::mpsc;
-use tokio::{io, net, prelude::*, task};
+use tokio::io::{self, AsyncReadExt};
+use tokio::{net, sync::mpsc, task};
+use warp::sse::Event;
 use warp::Filter;
 
 use super::{RobotId, Runner};
@@ -90,6 +91,7 @@ pub async fn serve(ids: Vec<RobotId>, address: String, port: Option<u16>) -> any
     println!("Website running at {}", url);
     eprintln!("Press Enter to stop");
 
+    let listener = tokio_stream::wrappers::TcpListenerStream::new(listener);
     let mut stdin = io::stdin();
     let mut buf = [0];
     tokio::select! {
@@ -112,7 +114,7 @@ async fn run(
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let r2 = OwningRef::new(ids).try_map(|ids| ids.get(params.id).ok_or_else(|| warp::reject()))?;
     let (tx, rx) = mpsc::unbounded_channel();
-    let join_handle = task::spawn(async move {
+    task::spawn(async move {
         let make_runner = |id| {
             Runner::from_id(id)
                 .map(|res| res.unwrap_or_else(|err| Err(logic::ProgramError::IO(err.to_string()))))
@@ -126,26 +128,31 @@ async fn run(
         let output = logic::run(
             runners,
             |inp| {
-                tx.send(warp::sse::json(serde_json::json!({
-                    "type": "getProgress",
-                    "data": inp,
-                })))
-                // if the reciever has been dropped, the stream has closed, so we can just panic to stop this task
-                .unwrap_or_else(|_| panic!("stop"));
+                let ev = Event::default()
+                    .json_data(serde_json::json!({
+                        "type": "getProgress",
+                        "data": inp,
+                    }))
+                    .unwrap();
+                tx.send(ev)
+                    // if the reciever has been dropped, the stream has closed, so we can just unwind
+                    // to stop this task. we don't use the panic!() macro since that would print out a
+                    // traceback, and this is just control flow
+                    .unwrap_or_else(|_| std::panic::resume_unwind(Box::new(())));
             },
             params.turns,
         )
         .await;
         // we don't really care if it's successful or not; we're done anyways
-        let _ = tx.send(warp::sse::json(serde_json::json!({
-            "type": "getOutput",
-            "data": output,
-        })));
+        let ev = Event::default()
+            .json_data(serde_json::json!({
+                "type": "getOutput",
+                "data": output,
+            }))
+            .unwrap();
+        let _ = tx.send(ev);
         drop(tx)
     });
-    // so that it doesn't print a panic message
-    task::spawn(join_handle);
-    Ok(warp::sse::reply(
-        warp::sse::keep_alive().stream(rx.map(Ok::<_, Never>)),
-    ))
+    let stream = tokio_stream::wrappers::UnboundedReceiverStream::new(rx).map(Ok::<_, Never>);
+    Ok(warp::sse::reply(warp::sse::keep_alive().stream(stream)))
 }

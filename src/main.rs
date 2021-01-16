@@ -3,13 +3,11 @@ use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use tokio::process::Command;
 use tokio::{io, time};
 use wasi_process::WasiProcess;
-use wasmer_runtime::{
-    cache::{Cache, FileSystemCache, WasmHash},
-    Module as WasmModule,
-};
+use wasmer_cache::{Cache, FileSystemCache};
 use wasmer_wasi::WasiVersion;
 
 use logic::RobotRunner;
@@ -147,14 +145,14 @@ enum RunnerKind {
     Wasi {
         runner: WasiRunner,
         /// the directory that we store the source file in; we need to keep it open
-        dir: tempfile::TempDir,
-        memory: wasmer_runtime::Memory,
+        _dir: tempfile::TempDir,
+        memory: wasmer::Memory,
     },
 }
 
 pub struct Runner {
     kind: RunnerKind,
-    timeout: Option<(time::Delay, time::Duration)>,
+    timeout: Option<(Pin<Box<time::Sleep>>, time::Duration)>,
 }
 
 #[async_trait::async_trait]
@@ -190,29 +188,31 @@ impl RobotRunner for Runner {
 impl Runner {
     fn set_timeout(&mut self, dur: time::Duration) {
         let instant = time::Instant::now() + dur;
-        self.timeout = Some((time::delay_until(instant), dur));
+        self.timeout = Some((Box::pin(time::sleep_until(instant)), dur));
     }
 
     async fn new_wasm(
-        module: &WasmModule,
+        store: &wasmer::Store,
+        module: &wasmer::Module,
         version: WasiVersion,
         args: &[String],
         dir: tempfile::TempDir,
     ) -> anyhow::Result<logic::ProgramResult<Self>> {
-        let mut state = wasmer_wasi::state::WasiState::new("robot");
+        let mut state = wasmer_wasi::WasiState::new("robot");
         wasi_process::add_stdio(&mut state);
         state
             .preopen(|p| p.directory(&dir).alias("source").read(true))
             .unwrap()
             .args(args)
             .arg("/source/sourcecode");
-        let imports =
-            wasmer_wasi::generate_import_object_from_state(state.build().unwrap(), version);
-        let instance = module
-            .instantiate(&imports)
-            .map_err(|_| anyhow!("error instantiating wasm module"))?;
-        let memory: wasmer_runtime::Memory = instance.exports.get("memory").unwrap();
-        let mut proc = WasiProcess::new(instance);
+        let env = wasmer_wasi::WasiEnv::new(state.build()?);
+        let instance = {
+            // imports isn't Send
+            let imports = wasmer_wasi::generate_import_object_from_env(store, env, version);
+            wasmer::Instance::new(module, &imports)?
+        };
+        let memory = instance.exports.get::<wasmer::Memory>("memory").unwrap();
+        let mut proc = WasiProcess::new(&instance, 256)?;
 
         let stdin = io::BufWriter::new(proc.stdin.take().unwrap());
         let stdout = io::BufReader::new(proc.stdout.take().unwrap());
@@ -227,8 +227,8 @@ impl Runner {
         let program_result = TokioRunner::new(stdin, stdout).await.map(|runner| Self {
             kind: RunnerKind::Wasi {
                 runner,
-                dir,
-                memory,
+                _dir: dir,
+                memory: memory.clone(),
             },
             timeout: None,
         });
@@ -244,13 +244,15 @@ impl Runner {
                     anyhow!("robot {}/{} has not published its code yet", user, robot)
                 })?;
                 let sourcedir = make_sourcedir_inline(&code)?;
-                let (module, version) = info.lang.get_wasm();
-                Runner::new_wasm(module, version, &[], sourcedir).await
+                let store = &*STORE;
+                let (module, version) = info.lang.get_wasm(store)?;
+                Runner::new_wasm(store, module, version, &[], sourcedir).await
             }
             RobotId::Local { source, lang } => {
                 let sourcedir = make_sourcedir(source)?;
-                let (module, version) = lang.get_wasm();
-                Runner::new_wasm(module, version, &[], sourcedir).await
+                let store = &*STORE;
+                let (module, version) = lang.get_wasm(store)?;
+                Runner::new_wasm(store, module, version, &[], sourcedir).await
             }
             RobotId::Command { command, args } => {
                 let mut cmd = Command::new(command);
@@ -270,18 +272,22 @@ impl Runner {
                 let wasm = tokio::fs::read(runner)
                     .await
                     .with_context(|| format!("couldn't read {}", runner))?;
-                let (module, version) = wasm_from_cache_or_compile(&wasm)
+                let store = &*STORE;
+                let (module, version) = wasm_from_cache_or_compile(store, &wasm)
                     .with_context(|| format!("couldn't compile wasm module at {}", runner))?;
-                Runner::new_wasm(&module, version, &runner_args, sourcedir).await
+                Runner::new_wasm(store, &module, version, &runner_args, sourcedir).await
             }
             RobotId::Inline { lang, source } => {
                 let sourcedir = make_sourcedir_inline(source)?;
-                let (module, version) = lang.get_wasm();
-                Runner::new_wasm(module, version, &[], sourcedir).await
+                let store = &*STORE;
+                let (module, version) = lang.get_wasm(store)?;
+                Runner::new_wasm(store, module, version, &[], sourcedir).await
             }
         }
     }
 }
+
+static STORE: Lazy<wasmer::Store> = Lazy::new(wasmer::Store::default);
 
 const PROD_BASE_URL: &str = "https://robotrumble.org";
 
@@ -300,13 +306,26 @@ static CONFIG: OnceCell<Config> = OnceCell::new();
 fn config() -> &'static Config {
     CONFIG.get().unwrap()
 }
-
-const XDG_NAME: &str = "rumblebot";
+fn store_config(path: &Path, c: &Config) -> anyhow::Result<()> {
+    std::fs::create_dir_all(path.parent().unwrap())?;
+    let s = toml::to_string_pretty(c)?;
+    std::fs::write(path, s)?;
+    Ok(())
+}
 
 async fn try_main() -> anyhow::Result<()> {
     let opt: Rumblebot = Rumblebot::from_args();
+    let config_dir = directories()?.config_dir();
+    let config_path = config_dir.join("config.toml");
     CONFIG
-        .get_or_try_init(|| confy::load(XDG_NAME))
+        .get_or_try_init(|| match fs::read_to_string(&config_path) {
+            Ok(s) => Ok(toml::from_str(&s)?),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => {
+                let c = Config::default();
+                store_config(&config_path, &c).map(|()| c)
+            }
+            Err(e) => Err(e.into()),
+        })
         .context("Unable to load config")?;
 
     match opt {
@@ -371,9 +390,9 @@ async fn try_main() -> anyhow::Result<()> {
                         .context("Error reading password (try passing the -p option)")?,
                 };
                 let auth_key = api::authenticate(&username, &password).await?;
-                confy::store(
-                    XDG_NAME,
-                    Config {
+                store_config(
+                    &config_path,
+                    &Config {
                         auth_key: Some(auth_key),
                         ..config().clone()
                     },
@@ -382,9 +401,9 @@ async fn try_main() -> anyhow::Result<()> {
                 println!("Logged in!")
             }
             Account::Logout {} => {
-                confy::store(
-                    XDG_NAME,
-                    Config {
+                store_config(
+                    &config_path,
+                    &Config {
                         auth_key: None,
                         ..config().clone()
                     },
@@ -475,37 +494,46 @@ fn robot_name_from_path(path: &Path) -> anyhow::Result<&str> {
         })
 }
 
+fn directories() -> anyhow::Result<&'static directories::ProjectDirs> {
+    static DIRS: OnceCell<directories::ProjectDirs> = OnceCell::new();
+    DIRS.get_or_try_init(|| {
+        directories::ProjectDirs::from("org", "Robot Rumble", "rumblebot")
+            .context("couldn't find configuration directory")
+    })
+}
+
 #[derive(Clone, Copy, strum::EnumString, strum::AsRefStr)]
 pub enum Lang {
     Python,
     Javascript,
 }
 
-fn get_wasm_cache() -> Option<FileSystemCache> {
-    let dir = dirs::cache_dir()?.join(XDG_NAME).join("wasm");
-    // unsafe because wasmer loads arbitrary code from this directory, but the wasmer
-    // cli does the same thing, and there's no cve for it ¯\_(ツ)_/¯
-    unsafe { FileSystemCache::new(dir).ok() }
+fn get_wasm_cache() -> anyhow::Result<FileSystemCache> {
+    let dir = directories()?.cache_dir().join("wasm");
+    Ok(FileSystemCache::new(dir)?)
 }
 
 fn wasm_from_cache_or_compile(
+    store: &wasmer::Store,
     wasm: &[u8],
-) -> wasmer_runtime::error::CompileResult<(WasmModule, WasiVersion)> {
-    let hash = WasmHash::generate(wasm);
-    let cache = get_wasm_cache();
-    let module = cache
-        .as_ref()
-        .and_then(|cache| cache.load(hash).ok())
-        .map_or_else(
-            || -> wasmer_runtime::error::CompileResult<_> {
-                let module = wasmer_runtime::compile(wasm)?;
-                if let Some(mut cache) = cache {
-                    cache.store(hash, module.clone()).ok();
+) -> anyhow::Result<(wasmer::Module, WasiVersion)> {
+    let module = match get_wasm_cache() {
+        Ok(mut cache) => {
+            let hash = wasmer_cache::Hash::generate(wasm);
+            // unsafe because wasmer loads arbitrary code from this directory, but the wasmer
+            // cli does the same thing, and there's no cve for it ¯\_(ツ)_/¯
+            let module = unsafe { cache.load(store, hash) };
+            match module {
+                Ok(m) => m,
+                Err(_) => {
+                    let module = wasmer::Module::new(store, wasm)?;
+                    let _ = cache.store(hash, &module);
+                    module
                 }
-                Ok(module)
-            },
-            Ok,
-        )?;
+            }
+        }
+        Err(_) => wasmer::Module::new(store, wasm)?,
+    };
     let version = wasmer_wasi::get_wasi_version(&module, false).unwrap_or(WasiVersion::Latest);
     Ok((module, version))
 }
@@ -525,23 +553,26 @@ impl Lang {
             Self::Javascript => "js",
         }
     }
-    fn get_wasm(self) -> (&'static WasmModule, WasiVersion) {
+    fn get_wasm(
+        self,
+        store: &wasmer::Store,
+    ) -> anyhow::Result<(&'static wasmer::Module, WasiVersion)> {
         macro_rules! compiled_runner {
             ($name:literal) => {{
-                static MODULE: Lazy<(WasmModule, WasiVersion)> = Lazy::new(|| {
+                static MODULE: OnceCell<(wasmer::Module, WasiVersion)> = OnceCell::new();
+                let (module, version) = MODULE.get_or_try_init(|| {
                     let wasm =
                         include_bytes!(concat!("../../logic/wasm-dist/lang-runners/", $name));
-                    wasm_from_cache_or_compile(wasm)
-                        .expect(concat!("couldn't compile wasm module ", $name))
-                });
-                let (module, version) = &*MODULE;
+                    wasm_from_cache_or_compile(store, wasm)
+                        .context(concat!("couldn't compile wasm module ", $name))
+                })?;
                 (module, *version)
             }};
         }
-        match self {
+        Ok(match self {
             Self::Python => compiled_runner!("pyrunner.wasm"),
             Self::Javascript => compiled_runner!("jsrunner.wasm"),
-        }
+        })
     }
 }
 
