@@ -728,15 +728,5 @@ fn parse_published_slug(s: &str) -> Option<(Option<&str>, &str)> {
 }
 
 fn turn_cb(turn_state: &logic::CallbackInput) {
-    println!("After turn {}:\n", turn_state.state.turn);
-    display::display_state(&turn_state.state);
-    for (team, logs) in &turn_state.logs {
-        if !logs.is_empty() {
-            println!(
-                "Logs for {:?}:\n{}",
-                team,
-                logs.iter().map(|s| s.trim()).format("\n"),
-            )
-        }
-    }
+    display::display_turn(turn_state).expect("printing failed");
 }

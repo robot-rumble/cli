@@ -41,7 +41,7 @@ strum = { version = "0.18.0", features = ["derive"] }
 log = "0.4"
 env_logger = { version = "0.8", default-features = false }
 
-colored = "1.9"
+termcolor = "1.1"
 
 openssl-sys = "0.9.58"
 
