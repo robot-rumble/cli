@@ -60,9 +60,9 @@ enum Run {
     #[structopt(verbatim_doc_comment)]
     Term {
         #[structopt(parse(from_os_str))]
-        robot1: OsString,
+        bluebot: OsString,
         #[structopt(parse(from_os_str))]
-        robot2: OsString,
+        redbot: OsString,
         /// The number of turns to run in the match
         #[structopt(short, long, default_value = "30")]
         turn_num: usize,
@@ -331,8 +331,8 @@ async fn try_main() -> anyhow::Result<()> {
     match opt {
         Rumblebot::Run(run_opt) => match run_opt {
             Run::Term {
-                robot1,
-                robot2,
+                bluebot,
+                redbot,
                 turn_num,
                 raw,
             } => {
@@ -341,10 +341,10 @@ async fn try_main() -> anyhow::Result<()> {
                     let runner = Runner::from_id(&id).await?;
                     Ok::<_, anyhow::Error>(runner)
                 };
-                let (r1, r2) = tokio::try_join!(get_runner(&robot1), get_runner(&robot2))?;
+                let (blue, red) = tokio::try_join!(get_runner(&bluebot), get_runner(&redbot))?;
                 let runners = maplit::btreemap! {
-                    logic::Team::Blue => r1,
-                    logic::Team::Red => r2,
+                    logic::Team::Blue => blue,
+                    logic::Team::Red => red,
                 };
                 let output = logic::run(
                     runners,
