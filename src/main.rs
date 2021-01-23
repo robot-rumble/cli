@@ -212,7 +212,7 @@ impl Runner {
             wasmer::Instance::new(module, &imports)?
         };
         let memory = instance.exports.get::<wasmer::Memory>("memory").unwrap();
-        let mut proc = WasiProcess::new(&instance, 256)?;
+        let mut proc = WasiProcess::new(&instance, Default::default())?;
 
         let stdin = io::BufWriter::new(proc.stdin.take().unwrap());
         let stdout = io::BufReader::new(proc.stdout.take().unwrap());
