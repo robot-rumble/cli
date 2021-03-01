@@ -44,7 +44,7 @@ fn main() {
             .metadata()
             .and_then(|m| Ok((m, dst.metadata()?)))
             .and_then(|(src, dst)| Ok(src.modified()? > dst.modified()?))
-            .unwrap_or(false);
+            .unwrap_or(true);
 
         if needs_updating {
             let wasm_source = fs::read(&src).unwrap();
