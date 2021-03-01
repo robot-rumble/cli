@@ -9,6 +9,10 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}-latest
 
+    defaults:
+      run:
+        shell: bash
+
     strategy:
       matrix:
         os: [ubuntu, macos, windows]
@@ -41,7 +45,9 @@ jobs:
       - run: aws s3 sync s3://${{ secrets.S3_BUCKET_BUILD }}/cli-assets dist
 
       - if: matrix.os == 'windows'
-        run: choco install llvm
+        run: |
+          choco install llvm
+          echo "LLVM_SYS_110_PREFIX=C:/Program Files/LLVM" >> $GITHUB_ENV
       - if: matrix.os == 'macos'
         run: |
           brew install llvm
