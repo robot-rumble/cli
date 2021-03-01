@@ -557,22 +557,20 @@ impl Lang {
         self,
         store: &wasmer::Store,
     ) -> anyhow::Result<(&'static wasmer::Module, WasiVersion)> {
-        macro_rules! compiled_runner {
-            ($name:literal) => {{
+        macro_rules! lang_runner {
+            ($bytes:expr) => {{
                 static MODULE: OnceCell<(wasmer::Module, WasiVersion)> = OnceCell::new();
                 let (module, version) = MODULE.get_or_try_init(|| {
-                    let wasm =
-                        include_bytes!(concat!("../../logic/wasm-dist/lang-runners/", $name));
-                    wasm_from_cache_or_compile(store, wasm)
-                        .context(concat!("couldn't compile wasm module ", $name))
+                    let module = unsafe { wasmer::Module::deserialize(store, $bytes)? };
+                    let version = wasmer_wasi::get_wasi_version(&module, false)
+                        .unwrap_or(WasiVersion::Latest);
+                    Ok::<_, anyhow::Error>((module, version))
                 })?;
                 (module, *version)
             }};
         }
-        Ok(match self {
-            Self::Python => compiled_runner!("pyrunner.wasm"),
-            Self::Javascript => compiled_runner!("jsrunner.wasm"),
-        })
+        let lang = self;
+        Ok(include!(concat!(env!("OUT_DIR"), "/lang_runners.rs")))
     }
 }
 

@@ -40,7 +40,7 @@ jobs:
       - run: aws s3 sync s3://${{ secrets.S3_BUCKET_PUBLIC }}/lang-runners ../logic/wasm-dist/lang-runners
       - run: aws s3 sync s3://${{ secrets.S3_BUCKET_BUILD }}/cli-assets dist
 
-      - run: cargo build --release --all-features
+      - run: cargo build --release --no-default-features --features build-llvm
 
       - if: matrix.os == 'windows'
         run: |
