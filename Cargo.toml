@@ -43,11 +43,7 @@ env_logger = { version = "0.8", default-features = false }
 
 termcolor = "1.1"
 
-openssl-sys = "0.9.58"
-
 [features]
-# Force openssl-sys to staticly link in the openssl library. Necessary for windows
-vendored = ["openssl-sys/vendored"]
 default = ["build-cranelift"]
 build-cranelift = ["wasmer-compiler-cranelift"]
 build-llvm = ["wasmer-compiler-llvm"]
