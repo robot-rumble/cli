@@ -12,10 +12,10 @@ pub fn display_turn(turn: &CallbackInput) -> io::Result<()> {
     out.reset()?;
 
     let grid_map = GridMap::from(&turn.state.objs);
-    for x in 0..GRID_SIZE {
+    for y in 0..GRID_SIZE {
         let mut first = true;
         let mut prev_wall = false;
-        for y in 0..GRID_SIZE {
+        for x in 0..GRID_SIZE {
             let details = grid_map
                 .get(&Coords(x, y))
                 .map(|id| turn.state.objs.get(&id).unwrap().details());
