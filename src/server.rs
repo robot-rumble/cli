@@ -53,9 +53,6 @@ pub async fn serve(ids: Vec<RobotId>, address: String, port: Option<u16>) -> any
                             serde_json::json!({
                                 "id": i,
                                 "name": format!("{} / {}", user, robot),
-                                "rating": 0,
-                                "lang": "n/a",
-                                "published": true,
                             })
                         })
                         .collect_vec(),
