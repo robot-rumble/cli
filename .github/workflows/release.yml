@@ -44,11 +44,10 @@ jobs:
         name: Install LLVM on windows
         shell: bash
         run: |
-          cargo install llvmenv
-          llvmenv init
-          llvmenv build-entry 11.0.0 -j4
-          llvmenv global 11.0.0
-          echo "LLVM_SYS_110_PREFIX=$(llvmenv prefix)" >> $GITHUB_ENV
+          mkdir .llvm
+          cd .llvm
+          curl https://github.com/wasmerio/llvm-custom-builds/releases/download/11.x/windows-amd64.tar.gz | tar xz
+          echo "LLVM_SYS_110_PREFIX=$PWD" >> $GITHUB_ENV
       - if: matrix.os == 'macos'
         run: |
           brew install llvm
