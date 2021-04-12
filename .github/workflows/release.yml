@@ -41,9 +41,14 @@ jobs:
       - run: aws s3 sync s3://${{ secrets.S3_BUCKET_BUILD }}/cli-assets dist
 
       - if: matrix.os == 'windows'
+        name: Install LLVM on windows
+        shell: bash
         run: |
-          choco install llvm
-          refreshenv
+          cargo install llvmenv
+          llvmenv init
+          llvmenv build-entry 11.0.0 -j4
+          llvmenv global 11.0.0
+          echo "LLVM_SYS_110_PREFIX=$(llvmenv prefix)" >> $GITHUB_ENV
       - if: matrix.os == 'macos'
         run: |
           brew install llvm
