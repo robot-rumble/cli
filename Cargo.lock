@@ -1717,6 +1717,7 @@ dependencies = [
  "strum",
  "tempfile",
  "termcolor",
+ "textwrap",
  "tokio",
  "tokio-stream",
  "toml",

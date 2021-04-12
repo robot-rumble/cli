@@ -42,6 +42,7 @@ log = "0.4"
 env_logger = { version = "0.8", default-features = false }
 
 termcolor = "1.1"
+textwrap = { version = "0.11", default-features = false }
 
 [features]
 default = ["build-cranelift"]

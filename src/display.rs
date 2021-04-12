@@ -1,4 +1,4 @@
-use logic::{CallbackInput, Coords, GridMap, ObjDetails, Team, GRID_SIZE};
+use logic::{CallbackInput, Coords, GridMap, ObjDetails, ProgramError, Team, GRID_SIZE};
 use std::io::{self, Write};
 use termcolor::{BufferedStandardStream, Color, ColorSpec, WriteColor};
 
@@ -72,5 +72,33 @@ fn team_color(team: Team) -> Color {
     match team {
         Team::Red => Color::Red,
         Team::Blue => Color::Blue,
+    }
+}
+
+pub fn display_output(output: logic::MainOutput) {
+    if let Some(w) = output.winner {
+        println!("Done! {:?} won", w);
+    } else {
+        println!("Done! it was a tie");
+    }
+    if !output.errors.is_empty() {
+        println!("Some errors occurred:");
+        for (team, error) in output.errors {
+            println!("  {:?}:", team);
+            display_error(error)
+        }
+    }
+}
+
+fn display_error(err: ProgramError) {
+    match err {
+        ProgramError::InitError(error) => {
+            let indent = |s| textwrap::indent(s, "    ");
+            println!("{}", indent(&error.summary));
+            if let Some(details) = error.details {
+                println!("{}", indent(&details));
+            }
+        }
+        _ => println!("    {:?}", err),
     }
 }

@@ -350,7 +350,7 @@ async fn try_main() -> anyhow::Result<()> {
                     runners,
                     |turn_state| {
                         if !raw {
-                            turn_cb(turn_state)
+                            display::display_turn(turn_state).expect("printing failed");
                         }
                     },
                     turn_num,
@@ -360,13 +360,7 @@ async fn try_main() -> anyhow::Result<()> {
                     let stdout = std::io::stdout();
                     serde_json::to_writer(stdout.lock(), &output).unwrap();
                 } else {
-                    if !output.errors.is_empty() {
-                        println!("Errors: {:?}", output.errors)
-                    } else if let Some(w) = output.winner {
-                        println!("Done! {:?} won", w);
-                    } else {
-                        println!("Done! nobody won");
-                    }
+                    display::display_output(output)
                 }
             }
             Run::Web {
@@ -723,8 +717,4 @@ fn parse_published_slug(s: &str) -> Option<(Option<&str>, &str)> {
         None => (None, a),
     };
     Some(ret)
-}
-
-fn turn_cb(turn_state: &logic::CallbackInput) {
-    display::display_turn(turn_state).expect("printing failed");
 }
