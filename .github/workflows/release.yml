@@ -9,10 +9,6 @@ jobs:
   build:
     runs-on: ${{ matrix.os }}-latest
 
-    defaults:
-      run:
-        shell: bash
-
     strategy:
       matrix:
         os: [ubuntu, macos, windows]
@@ -47,7 +43,7 @@ jobs:
       - if: matrix.os == 'windows'
         run: |
           choco install llvm
-          echo "LLVM_SYS_110_PREFIX=C:/Program Files/LLVM" >> $GITHUB_ENV
+          refreshenv
       - if: matrix.os == 'macos'
         run: |
           brew install llvm
