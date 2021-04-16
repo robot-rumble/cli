@@ -57,6 +57,8 @@ jobs:
         run: sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 
       - run: cargo build --release --no-default-features --features build-llvm
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
       - if: matrix.os == 'windows'
         run: |
