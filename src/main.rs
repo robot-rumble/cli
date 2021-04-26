@@ -65,7 +65,7 @@ enum Run {
         #[structopt(parse(from_os_str))]
         redbot: OsString,
         /// The number of turns to run in the match
-        #[structopt(short, long, default_value = "30")]
+        #[structopt(short, long, default_value = "100")]
         turn_num: usize,
         /// Avoid printing human-friendly info and just output JSON
         #[structopt(long)]
