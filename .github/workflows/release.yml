@@ -6,12 +6,45 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  compile_windows:
+    runs-on: ubuntu-latest
+
+    steps:
+      - run: curl https://get.wasmer.io -sSfL | sh
+
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - run: aws s3 sync s3://${{ secrets.S3_BUCKET_PUBLIC }}/lang-runners lang-runners
+
+      - name: Compile windows runners
+        run: |
+          source ~/.wasmer/wasmer.sh
+          for runner in lang-runners/*.wasm; do
+            wasmer compile --target x86_64-pc-windows-msvc --llvm "$runner" -o "${runner/.wasm/.wjit}"
+            rm "$runner"
+          done
+
+      - uses: actions/upload-artifact@v2
+        with:
+          name: windows-runners
+          path: lang-runners/
+
   build:
+    needs: compile_windows
     runs-on: ${{ matrix.os }}-latest
 
     strategy:
       matrix:
-        os: [ubuntu, macos] #, windows]
+        include:
+          - os: ubuntu
+            cargoargs: --features build-llvm
+          - os: macos
+            cargoargs: --features build-llvm
+          - os: windows
+            cargoargs: ''
 
     steps:
       - uses: actions/checkout@v2
@@ -41,14 +74,12 @@ jobs:
       - run: aws s3 sync s3://${{ secrets.S3_BUCKET_BUILD }}/cli-assets dist
 
       - if: matrix.os == 'windows'
-        name: Install LLVM on windows
-        shell: bash
-        run: |
-          cargo install llvmenv
-          llvmenv init
-          llvmenv build-entry 11.0.0 -j4
-          llvmenv global 11.0.0
-          echo "LLVM_SYS_110_PREFIX=$(llvmenv prefix)" >> $GITHUB_ENV
+        uses: actions/download-artifact@v2
+        with:
+          name: windows-runners
+          path: compiled_runners
+      - if: matrix.os == 'windows'
+        run: echo "COMPILED_RUNNERS=compiled_runners" >>$GITHUB_ENV
       - if: matrix.os == 'macos'
         run: |
           brew install llvm
@@ -56,7 +87,7 @@ jobs:
       - if: matrix.os == 'ubuntu'
         run: sudo bash -c "$(wget -O - https://apt.llvm.org/llvm.sh)"
 
-      - run: cargo build --release --no-default-features --features build-llvm
+      - run: cargo build --release --no-default-features ${{matrix.cargoargs}}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
