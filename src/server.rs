@@ -132,7 +132,7 @@ async fn run(
                     }))
                     .unwrap();
                 tx.send(ev)
-                    // if the reciever has been dropped, the stream has closed, so we can just unwind
+                    // if the receiver has been dropped, the stream has closed, so we can just unwind
                     // to stop this task. we don't use the panic!() macro since that would print out a
                     // traceback, and this is just control flow
                     .unwrap_or_else(|_| std::panic::resume_unwind(Box::new(())));
