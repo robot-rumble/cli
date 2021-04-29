@@ -138,6 +138,7 @@ async fn run(
                     .unwrap_or_else(|_| std::panic::resume_unwind(Box::new(())));
             },
             params.turns,
+            true,
         )
         .await;
         // we don't really care if it's successful or not; we're done anyways

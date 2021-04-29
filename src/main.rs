@@ -355,6 +355,7 @@ async fn try_main() -> anyhow::Result<()> {
                         }
                     },
                     turn_num,
+                    true
                 )
                 .await;
                 if raw {
