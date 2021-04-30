@@ -8,7 +8,7 @@ pub fn display_turn(turn: &CallbackInput) -> io::Result<()> {
     let mut bold = ColorSpec::new();
     bold.set_bold(true);
     out.set_color(&bold)?;
-    writeln!(out, "After turn {}:", turn.state.turn + 1)?;
+    writeln!(out, "After turn {}:", turn.state.turn)?;
     out.reset()?;
 
     let grid_map = GridMap::from(&turn.state.objs);
