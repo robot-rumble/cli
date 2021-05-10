@@ -86,7 +86,7 @@ pub async fn robot_info(user: &str, robot: &str) -> anyhow::Result<Option<RobotI
 
 pub async fn robot_code(id: usize) -> anyhow::Result<Option<String>> {
     let res = CLIENT
-        .get(build_url!("api" / "get-robot-code" / (&id.to_string()))?)
+        .get(build_url!("api" / "get-published-code" / (&id.to_string()))?)
         .send()
         .await?;
     let code: String = handle_response(res).await?.json().await?;
