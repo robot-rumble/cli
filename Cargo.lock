@@ -2156,8 +2156,9 @@ dependencies = [
 
 [[package]]
 name = "static_dir"
-version = "0.1.3"
-source = "git+https://github.com/coolreader18/static_dir?branch=tokio1#4f83919b4bc6de7e2f5228eb5d68aa0b8e3a26d2"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8286dc044d09abcb8bf85440b94f2c41aee322733a58cd195cf830ee660cadf5"
 dependencies = [
  "headers",
  "http",
