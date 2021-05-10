@@ -24,7 +24,7 @@ mod server;
 #[tokio::main]
 async fn main() {
     env_logger::init();
-    let _sentry = sentry::init(env!("SENTRY_DSN"));
+    let _sentry = option_env!("SENTRY_DSN").map(sentry::init);
 
     if let Err(err) = try_main().await {
         eprintln!("ERROR: {}", err);
