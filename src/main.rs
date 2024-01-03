@@ -245,7 +245,7 @@ impl Runner {
                     .await?
                     .ok_or_else(|| anyhow!("robot {}/{} not found", user, robot))?;
                 let code = api::robot_code(info.id).await?.ok_or_else(|| {
-                    anyhow!("robot {}/{} has not published its code yet", user, robot)
+                    anyhow!("robot {}/{} has no open source published code", user, robot)
                 })?;
                 let sourcedir = make_sourcedir_inline(&code)?;
                 let store = &*STORE;
@@ -462,7 +462,7 @@ async fn try_main() -> anyhow::Result<()> {
                     .ok_or_else(|| anyhow!("robot {} not found", robot))?;
                 let code = api::robot_code(info.id)
                     .await?
-                    .ok_or_else(|| anyhow!("robot {} has no code", robot))?;
+                    .ok_or_else(|| anyhow!("robot {} has no open source published code", robot))?;
                 let dest = dest.unwrap_or_else(|| format!("{}.{}", robot, info.lang.ext()).into());
                 fs::write(dest.clone(), code)?;
                 println!(
