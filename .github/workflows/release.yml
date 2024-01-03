@@ -83,12 +83,12 @@ jobs:
         shell: bash
       - if: matrix.os == 'macos'
         run: |
-          brew install llvm@10
+          brew install llvm@15
           echo "LLVM_SYS_110_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
       - if: matrix.os == 'ubuntu'
         run: |
           wget https://apt.llvm.org/llvm.sh -O /tmp/llvm.sh
-          sudo bash /tmp/llvm.sh 10
+          sudo bash /tmp/llvm.sh 15
 
       - run: cargo build --release --no-default-features ${{matrix.cargoargs}}
         env:
