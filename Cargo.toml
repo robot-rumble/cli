@@ -17,11 +17,18 @@ futures-util = "0.3.5"
 warp = { version = "0.3", default-features = false }
 static_dir = "0.2"
 webbrowser = "0.5.4"
-reqwest = { version = "0.11", features = ["cookies", "json"] }
+reqwest = { version = "0.11", features = [
+  "cookies",
+  "json",
+  "native-tls-vendored",
+] }
 
 native-runner = { path = "../logic/env-runners/native" }
 wasi-process = "0.3"
-wasmer = { version = "1.0", default-features = false, features = ["default-jit", "default-cranelift"] }
+wasmer = { version = "1.0", default-features = false, features = [
+  "default-jit",
+  "default-cranelift",
+] }
 wasmer-cache = "1.0"
 wasmer-wasi = "1.0"
 
