@@ -70,6 +70,9 @@ enum Run {
         /// Avoid printing human-friendly info and just output JSON
         #[structopt(long)]
         raw: bool,
+        /// Only show the results of the battle
+        #[structopt(long)]
+        results_only: bool,
     },
     /// Run a battle and show the results in the normal web display
     ///
@@ -336,6 +339,7 @@ async fn try_main() -> anyhow::Result<()> {
                 redbot,
                 turn_num,
                 raw,
+                results_only,
             } => {
                 let get_runner = |id| async move {
                     let id = RobotId::parse(id).context("Couldn't parse robot identifier")?;
@@ -350,13 +354,13 @@ async fn try_main() -> anyhow::Result<()> {
                 let output = logic::run(
                     runners,
                     |turn_state| {
-                        if !raw {
+                        if !raw && !results_only {
                             display::display_turn(turn_state).expect("printing failed");
                         }
                     },
                     turn_num,
                     true,
-                    None
+                    None,
                 )
                 .await;
                 if raw {
