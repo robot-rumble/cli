@@ -88,7 +88,7 @@ jobs:
       - if: matrix.os == 'ubuntu'
         run: |
           wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          add-apt-repository 'deb http://apt.llvm.org/bionic/   llvm-toolchain-bionic-10  main'
+          sudo add-apt-repository 'deb http://apt.llvm.org/bionic/   llvm-toolchain-bionic-10  main'
           sudo apt update
           sudo apt install llvm
           sudo apt-get install llvm-10 lldb-10 llvm-10-dev libllvm10 llvm-10-runtime
