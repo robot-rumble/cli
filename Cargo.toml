@@ -62,7 +62,7 @@ build-llvm = ["wasmer-compiler-llvm"]
 wasmer = { version = "1.0", default-features = false, features = ["jit"] }
 wasmer-engine = "1.0"
 wasmer-compiler-cranelift = { version = "1.0", optional = true }
-wasmer-compiler-llvm = { version = "4.2.5", optional = true }
+wasmer-compiler-llvm = { version = "1.0", optional = true }
 
 [patch.crates-io]
 multipart = { git = "https://github.com/coolreader18/multipart", rev = "ee033794ada7c322e3cef50713854dff873f546d" }

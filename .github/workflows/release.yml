@@ -79,16 +79,19 @@ jobs:
           name: windows-runners
           path: compiled_runners
       - if: matrix.os == 'windows'
-        run: echo "COMPILED_RUNNERS=compiled_runners" >>$GITHUB_ENV
+        run: echo "COMPILED_RUNNERS=compiled_runners" >> $GITHUB_ENV
         shell: bash
       - if: matrix.os == 'macos'
         run: |
-          brew install llvm@15
+          brew install llvm@10
           echo "LLVM_SYS_110_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
       - if: matrix.os == 'ubuntu'
         run: |
-          wget https://apt.llvm.org/llvm.sh -O /tmp/llvm.sh
-          sudo bash /tmp/llvm.sh 15
+          wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          add-apt-repository 'deb http://apt.llvm.org/bionic/   llvm-toolchain-bionic-10  main'
+          sudo apt update
+          sudo apt install llvm
+          sudo apt-get install llvm-10 lldb-10 llvm-10-dev libllvm10 llvm-10-runtime
 
       - run: cargo build --release --no-default-features ${{matrix.cargoargs}}
         env:
