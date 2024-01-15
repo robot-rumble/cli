@@ -90,12 +90,13 @@ jobs:
 
       - if: matrix.os == 'ubuntu-20.04'
         run: |
+          sudo apt update
+          sudo apt install liblldb-10 python3-lldb-10
           wget "https://mirrors.kernel.org/ubuntu/pool/main/libf/libffi/libffi6_3.2.1-8_amd64.deb"
           sudo apt install ./libffi6_3.2.1-8_amd64.deb
           wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo add-apt-repository 'deb http://apt.llvm.org/bionic/   llvm-toolchain-bionic-10  main'
           sudo apt update
-          sudo apt install liblldb-10 python3-lldb-10
           sudo apt install llvm
           sudo apt-get install llvm-10 lldb-10 llvm-10-dev libllvm10 llvm-10-runtime
 
