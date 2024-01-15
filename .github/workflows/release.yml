@@ -87,7 +87,7 @@ jobs:
         run: |
           wget https://github.com/macports/macports-base/releases/download/v2.7.1/MacPorts-2.7.1-12-Monterey.pkg
           sudo installer -pkg ./MacPorts-2.7.1-12-Monterey.pkg -target /
-          sudo port install llvm-10 
+          sudo /opt/local/bin/port install llvm-10 
 
       - if: matrix.os == 'ubuntu-20.04'
         run: |
