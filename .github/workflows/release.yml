@@ -41,8 +41,8 @@ jobs:
         include:
           - os: ubuntu-20.04
             cargoargs: --features build-llvm
-          - os: macos-latest
-            cargoargs: --features build-llvm
+          # - os: macos-latest
+          #   cargoargs: --features build-llvm
           # - os: windows-latest
           #   cargoargs: ''
 
@@ -90,6 +90,8 @@ jobs:
 
       - if: matrix.os == 'ubuntu-20.04'
         run: |
+          wget "https://mirrors.kernel.org/ubuntu/pool/main/libf/libffi/libffi6_3.2.1-8_amd64.deb"
+          sudo apt install ./libffi6_3.2.1-8_amd64.deb
           wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo add-apt-repository 'deb http://apt.llvm.org/bionic/   llvm-toolchain-bionic-10  main'
           sudo apt update
