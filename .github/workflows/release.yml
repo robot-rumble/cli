@@ -88,10 +88,11 @@ jobs:
           wget https://github.com/macports/macports-base/releases/download/v2.7.1/MacPorts-2.7.1-12-Monterey.pkg
           sudo installer -pkg ./MacPorts-2.7.1-12-Monterey.pkg -target /
           sudo /opt/local/bin/port install llvm-10 
-          tree /opt/local/
-          tree /opt/local/libexec
-          tree /opt/local/libexec/llvm-10
-          echo "LLVM_SYS_110_PREFIX=/opt/local/libexec/llvm-10" >> $GITHUB_ENV
+          export LLVM_SYS_110_PREFIX=/opt/local/libexec/llvm-10
+          export LLVM_CONFIG_PATH=/opt/local/libexec/llvm-10/bin/llvm-config
+          cargo build --release --no-default-features ${{matrix.cargoargs}}
+        env:
+          SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
       - if: matrix.os == 'ubuntu-20.04'
         run: |
@@ -102,10 +103,6 @@ jobs:
           sudo apt update
           sudo apt install llvm
           sudo apt-get install llvm-10 llvm-10-dev libllvm10 llvm-10-runtime
-
-      - run: |
-          export LLVM_SYS_110_PREFIX=${{ env.LLVM_SYS_110_PREFIX }}
-          export LLVM_CONFIG_PATH=${LLVM_SYS_110_PREFIX}/bin/llvm-config
           cargo build --release --no-default-features ${{matrix.cargoargs}}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
