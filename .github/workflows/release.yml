@@ -73,19 +73,22 @@ jobs:
       - run: aws s3 sync s3://${{ secrets.S3_BUCKET_PUBLIC }}/lang-runners ../logic/wasm-dist/lang-runners
       - run: aws s3 sync s3://${{ secrets.S3_BUCKET_BUILD }}/cli-assets dist
 
-      - if: matrix.os == 'windows'
+      - if: matrix.os == 'windows-latest'
         uses: actions/download-artifact@v2
         with:
           name: windows-runners
           path: compiled_runners
-      - if: matrix.os == 'windows'
+
+      - if: matrix.os == 'windows-latest'
         run: echo "COMPILED_RUNNERS=compiled_runners" >> $GITHUB_ENV
         shell: bash
-      - if: matrix.os == 'macos'
+
+      - if: matrix.os == 'macos-latest'
         run: |
           brew install llvm@10
           echo "LLVM_SYS_110_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
-      - if: matrix.os == 'ubuntu'
+
+      - if: matrix.os == 'ubuntu-20.04'
         run: |
           wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo add-apt-repository 'deb http://apt.llvm.org/bionic/   llvm-toolchain-bionic-10  main'
@@ -97,13 +100,13 @@ jobs:
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
-      - if: matrix.os == 'windows'
+      - if: matrix.os == 'windows-latest'
         run: |
           mkdir release
           cp -Path target/release/rumblebot.exe -Destination release
           cp -Path README.md -Destination release
 
-      - if: matrix.os == 'macos' || matrix.os == 'ubuntu'
+      - if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-20.04'
         run: |
           mkdir release
           cp target/release/rumblebot release
