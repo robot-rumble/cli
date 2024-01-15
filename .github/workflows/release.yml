@@ -41,8 +41,8 @@ jobs:
         include:
           - os: ubuntu-20.04
             cargoargs: --features build-llvm
-          # - os: macos-latest
-          #   cargoargs: --features build-llvm
+          - os: macos-12
+            cargoargs: --features build-llvm
           # - os: windows-latest
           #   cargoargs: ''
 
@@ -83,10 +83,11 @@ jobs:
         run: echo "COMPILED_RUNNERS=compiled_runners" >> $GITHUB_ENV
         shell: bash
 
-      - if: matrix.os == 'macos-latest'
+      - if: matrix.os == 'macos-12'
         run: |
-          brew install llvm@10
-          echo "LLVM_SYS_110_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
+          wget https://github.com/macports/macports-base/releases/download/v2.7.1/MacPorts-2.7.1-12-Monterey.pkg
+          sudo installer -pkg ./MacPorts-2.7.1-12-Monterey.pkg -target /
+          sudo port install llvm-10 
 
       - if: matrix.os == 'ubuntu-20.04'
         run: |
@@ -108,7 +109,7 @@ jobs:
           cp -Path target/release/rumblebot.exe -Destination release
           cp -Path README.md -Destination release
 
-      - if: matrix.os == 'macos-latest' || matrix.os == 'ubuntu-20.04'
+      - if: matrix.os == 'macos-12' || matrix.os == 'ubuntu-20.04'
         run: |
           mkdir release
           cp target/release/rumblebot release
