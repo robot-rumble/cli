@@ -33,7 +33,7 @@ jobs:
   #         path: lang-runners/
 
   build:
-    needs: compile_windows
+    # needs: compile_windows
     runs-on: ${{ matrix.os }}
 
     strategy:
