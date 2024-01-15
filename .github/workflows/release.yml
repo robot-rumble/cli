@@ -1,6 +1,9 @@
 on:
   release:
     types: [created]
+  push:
+    branches:
+      - master
 
 env:
   CARGO_TERM_COLOR: always
@@ -34,16 +37,16 @@ jobs:
 
   build:
     needs: compile_windows
-    runs-on: ${{ matrix.os }}-latest
+    runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
         include:
-          - os: ubuntu
+          - os: ubuntu-20.04
             cargoargs: --features build-llvm
-          - os: macos
+          - os: macos-latest
             cargoargs: --features build-llvm
-          - os: windows
+          - os: windows-latest
             cargoargs: ''
 
     steps:
