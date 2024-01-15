@@ -103,7 +103,10 @@ jobs:
           sudo apt install llvm
           sudo apt-get install llvm-10 llvm-10-dev libllvm10 llvm-10-runtime
 
-      - run: cargo build --release --no-default-features ${{matrix.cargoargs}}
+      - run: |
+          export LLVM_SYS_110_PREFIX=${{ env.LLVM_SYS_110_PREFIX }}
+          export LLVM_CONFIG_PATH=${LLVM_SYS_110_PREFIX}/bin/llvm-config
+          cargo build --release --no-default-features ${{matrix.cargoargs}}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
