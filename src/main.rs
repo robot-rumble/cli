@@ -367,7 +367,10 @@ async fn try_main() -> anyhow::Result<()> {
                     let stdout = std::io::stdout();
                     serde_json::to_writer(stdout.lock(), &output).unwrap();
                 } else {
-                    display::display_output(output)
+                    if !results_only {
+                        println!("");
+                    }
+                    display::display_output(output)?;
                 }
             }
             Run::Web {
