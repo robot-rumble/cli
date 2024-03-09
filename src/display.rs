@@ -121,20 +121,20 @@ pub fn write_turn_info_values(
     // spec.set_fg(Some(Color::White));
     write!(out, "Health ")?;
     let mut spec = ColorSpec::new();
-    spec.set_fg(Some(team_color(Team::Red)));
-    out.set_color(&spec)?;
-    write!(out, "{} ", rh)?;
     spec.set_fg(Some(team_color(Team::Blue)));
     out.set_color(&spec)?;
-    write!(out, "{}", bh)?;
+    write!(out, "{} ", bh)?;
+    spec.set_fg(Some(team_color(Team::Red)));
+    out.set_color(&spec)?;
+    write!(out, "{}", rh)?;
     out.reset()?;
     write!(out, " Units ")?;
-    spec.set_fg(Some(team_color(Team::Red)));
-    out.set_color(&spec)?;
-    write!(out, "{} ", rc)?;
     spec.set_fg(Some(team_color(Team::Blue)));
     out.set_color(&spec)?;
-    write!(out, "{}", bc)?;
+    write!(out, "{} ", bc)?;
+    spec.set_fg(Some(team_color(Team::Red)));
+    out.set_color(&spec)?;
+    write!(out, "{}", rc)?;
     out.reset()?;
     out.flush()?;
     Ok(())
