@@ -361,6 +361,7 @@ async fn try_main() -> anyhow::Result<()> {
                     turn_num,
                     true,
                     None,
+                    logic::GameMode::Normal,
                 )
                 .await;
                 if raw {
