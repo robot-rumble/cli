@@ -153,8 +153,10 @@ pub fn display_output(output: logic::MainOutput) -> io::Result<()> {
 
     print!("Final state: ");
 
-    let mut out = BufferedStandardStream::stdout(termcolor::ColorChoice::Auto);
-    write_turn_info_values(&mut out, output.turns.last().expect("No final turn!"))?;
+    if let Some(final_turn) = output.turns.last() {
+        let mut out = BufferedStandardStream::stdout(termcolor::ColorChoice::Auto);
+        write_turn_info_values(&mut out, final_turn)?;
+    }
 
     if !output.errors.is_empty() {
         println!("Some errors occurred:");
