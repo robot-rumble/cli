@@ -141,6 +141,7 @@ async fn run(
             true,
             None,
             logic::GameMode::Normal,
+            None,
         )
         .await;
         // we don't really care if it's successful or not; we're done anyways

@@ -73,6 +73,12 @@ enum Run {
         /// Only show the results of the battle
         #[structopt(long)]
         results_only: bool,
+        /// Choose the gamemode. Current supported: "Normal"
+        #[structopt(long, parse(from_os_str))]
+        game_mode: Option<OsString>,
+        /// Specify a random seed for robot spawning. It can be of any length.
+        #[structopt(long, parse(from_os_str))]
+        seed: Option<OsString>,
     },
     /// Run a battle and show the results in the normal web display
     ///
@@ -340,6 +346,8 @@ async fn try_main() -> anyhow::Result<()> {
                 turn_num,
                 raw,
                 results_only,
+                game_mode: game_mode_string,
+                seed,
             } => {
                 let get_runner = |id| async move {
                     let id = RobotId::parse(id).context("Couldn't parse robot identifier")?;
@@ -351,6 +359,15 @@ async fn try_main() -> anyhow::Result<()> {
                     logic::Team::Blue => blue,
                     logic::Team::Red => red,
                 };
+
+                let game_mode = match game_mode_string {
+                    Some(s) => {
+                        let s_json = format!("\"{}\"", s.to_str().unwrap());
+                        serde_json::from_str::<logic::GameMode>(&s_json).expect("Unknown gamemode")
+                    }
+                    None => logic::GameMode::Normal,
+                };
+
                 let output = logic::run(
                     runners,
                     |turn_state| {
@@ -361,7 +378,8 @@ async fn try_main() -> anyhow::Result<()> {
                     turn_num,
                     true,
                     None,
-                    logic::GameMode::Normal,
+                    game_mode,
+                    seed.map(|s| s.to_string_lossy().into_owned()).as_deref(),
                 )
                 .await;
                 if raw {
