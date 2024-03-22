@@ -525,7 +525,7 @@ fn directories() -> anyhow::Result<&'static directories::ProjectDirs> {
     })
 }
 
-#[derive(Clone, Copy, strum::EnumString, strum::AsRefStr)]
+#[derive(Clone, Copy, serde::Deserialize, strum::EnumString, strum::AsRefStr)]
 pub enum Lang {
     Python,
     Javascript,

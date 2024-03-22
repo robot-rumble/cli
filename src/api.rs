@@ -46,7 +46,6 @@ struct Error {
 #[derive(serde::Deserialize)]
 pub struct RobotInfo {
     pub id: usize,
-    #[serde(with = "serde_with::rust::display_fromstr")]
     pub lang: Lang,
     // userId: usize,
 }
