@@ -70,6 +70,12 @@ enum Run {
         /// Avoid printing human-friendly info and just output JSON
         #[structopt(long)]
         raw: bool,
+        /// Show only the blue robot's logs
+        #[structopt(long)]
+        blue_logs_only: bool,
+        /// Show only the red robot's logs
+        #[structopt(long)]
+        red_logs_only: bool,
         /// Only show the results of the battle
         #[structopt(long)]
         results_only: bool,
@@ -345,6 +351,8 @@ async fn try_main() -> anyhow::Result<()> {
                 redbot,
                 turn_num,
                 raw,
+                blue_logs_only,
+                red_logs_only,
                 results_only,
                 game_mode: game_mode_string,
                 seed,
@@ -372,7 +380,8 @@ async fn try_main() -> anyhow::Result<()> {
                     runners,
                     |turn_state| {
                         if !raw && !results_only {
-                            display::display_turn(turn_state).expect("printing failed");
+                            display::display_turn(turn_state, !red_logs_only, !blue_logs_only)
+                                .expect("printing failed");
                         }
                     },
                     turn_num,

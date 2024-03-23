@@ -2,7 +2,11 @@ use logic::{CallbackInput, Coords, GridMap, ObjDetails, ProgramError, Team, GRID
 use std::io::{self, Write};
 use termcolor::{BufferedStandardStream, Color, ColorSpec, WriteColor};
 
-pub fn display_turn(turn: &CallbackInput) -> io::Result<()> {
+pub fn display_turn(
+    turn: &CallbackInput,
+    show_blue_logs: bool,
+    show_red_logs: bool,
+) -> io::Result<()> {
     let mut out = BufferedStandardStream::stdout(termcolor::ColorChoice::Auto);
 
     let mut bold = ColorSpec::new();
@@ -52,7 +56,10 @@ pub fn display_turn(turn: &CallbackInput) -> io::Result<()> {
     writeln!(out)?;
 
     for (&team, logs) in &turn.logs {
-        if !logs.is_empty() {
+        if !logs.is_empty()
+            && ((show_blue_logs && team == logic::Team::Blue)
+                || (show_red_logs && team == logic::Team::Red))
+        {
             let color = team_color(team);
 
             let mut header = bold.clone();
