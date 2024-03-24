@@ -90,6 +90,7 @@ jobs:
 
       - if: matrix.os == 'ubuntu-22.04'
         run: |
+          wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
           sudo apt update
           sudo apt install llvm llvm-dev libllvm llvm-runtime
