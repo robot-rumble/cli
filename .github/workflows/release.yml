@@ -97,8 +97,7 @@ jobs:
           wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
           sudo apt update
-          sudo apt install llvm-12 llvm-12-dev libllvm12 llvm-12-runtime
-
+          sudo apt install clang-format clang-tidy clang-tools clang clangd libc++-dev libc++1 libc++abi-dev libc++abi1 libclang-dev libclang1 liblldb-dev libllvm-ocaml-dev libomp-dev libomp5 lld lldb llvm-dev llvm-runtime llvm python3-clang 
       - run: cargo build --release --no-default-features ${{matrix.cargoargs}}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
