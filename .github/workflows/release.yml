@@ -1,10 +1,6 @@
 on:
   release:
     types: [created]
-  push:
-    branches:
-      - master
-
 
 env:
   CARGO_TERM_COLOR: always
@@ -45,18 +41,18 @@ jobs:
         include:
           - os: ubuntu-22.04
             cargoargs: --features build-llvm
-          - os: macos-12
-            cargoargs: --features build-llvm
+          # - os: macos-12
+          #   cargoargs: --features build-llvm
           # - os: windows-latest
           #   cargoargs: ''
 
     steps:
       - uses: actions/checkout@v2
 
-      # - id: get_release
-      #   uses: bruceadams/get-release@v1.2.0
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - id: get_release
+        uses: bruceadams/get-release@v1.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/cache@v2
         with:
@@ -117,11 +113,11 @@ jobs:
           cp README.md release
 
       - run: 7z a release.zip ./release/*
-      # - uses: actions/upload-release-asset@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     upload_url: ${{ steps.get_release.outputs.upload_url }}
-      #     asset_path: release.zip
-      #     asset_name: rumblebot-${{ matrix.os }}.zip
-      #     asset_content_type: application/zip
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: release.zip
+          asset_name: rumblebot-${{ matrix.os }}.zip
+          asset_content_type: application/zip
