@@ -303,7 +303,10 @@ impl Runner {
     }
 }
 
-static STORE: Lazy<wasmer::Store> = Lazy::new(wasmer::Store::default);
+static STORE: Lazy<wasmer::Store> = Lazy::new(|| {
+    let engine = wasmer::UniversalEngine::headless();
+    wasmer::Store::new(&engine)
+});
 
 const PROD_BASE_URL: &str = "https://robotrumble.org";
 
