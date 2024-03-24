@@ -43,7 +43,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ubuntu-20.04
             cargoargs: --features build-llvm
           - os: macos-12
             cargoargs: --features build-llvm
@@ -92,7 +92,7 @@ jobs:
           brew install llvm@12
           echo "LLVM_SYS_120_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
 
-      - if: matrix.os == 'ubuntu-22.04'
+      - if: matrix.os == 'ubuntu-20.04'
         run: |
           wget "https://mirrors.kernel.org/ubuntu/pool/main/libf/libffi/libffi6_3.2.1-8_amd64.deb"
           sudo apt install ./libffi6_3.2.1-8_amd64.deb
@@ -111,7 +111,7 @@ jobs:
           cp -Path target/release/rumblebot.exe -Destination release
           cp -Path README.md -Destination release
 
-      - if: matrix.os == 'macos-12' || matrix.os == 'ubuntu-22.04'
+      - if: matrix.os == 'macos-12' || matrix.os == 'ubuntu-20.04'
         run: |
           mkdir release
           cp target/release/rumblebot release
