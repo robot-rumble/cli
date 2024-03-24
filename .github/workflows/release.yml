@@ -39,7 +39,7 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-22.04
+          - os: ubuntu-20.04
             cargoargs: --features build-llvm
           # - os: macos-12
           #   cargoargs: --features build-llvm
@@ -90,8 +90,10 @@ jobs:
           echo 'LDFLAGS="-L/usr/local/opt/llvm@12/lib"' >> $GITHUB_ENV
           echo 'CPPFLAGS="-I/usr/local/opt/llvm@12/include"' >> $GITHUB_ENV
 
-      - if: matrix.os == 'ubuntu-22.04'
+      - if: matrix.os == 'ubuntu-20.04'
         run: |
+          wget "https://mirrors.kernel.org/ubuntu/pool/main/libf/libffi/libffi6_3.2.1-8_amd64.deb"
+          sudo apt install ./libffi6_3.2.1-8_amd64.deb
           wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
           sudo apt update
@@ -106,7 +108,7 @@ jobs:
           cp -Path target/release/rumblebot.exe -Destination release
           cp -Path README.md -Destination release
 
-      - if: matrix.os == 'macos-12' || matrix.os == 'ubuntu-22.04'
+      - if: matrix.os == 'macos-12' || matrix.os == 'ubuntu-20.04'
         run: |
           mkdir release
           cp target/release/rumblebot release
