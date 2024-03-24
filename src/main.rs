@@ -1,16 +1,21 @@
 use native_runner::{CommandRunner, TokioRunner};
+use serde::Deserialize;
 use std::borrow::Cow;
 use std::ffi::{OsStr, OsString};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::time::Instant;
 use tokio::process::Command;
-use tokio::{io, time};
+use tokio::{
+    io::{self, AsyncBufReadExt},
+    time,
+};
 use wasi_process2::WasiProcess;
 use wasmer_cache::{Cache, FileSystemCache};
 use wasmer_wasi::WasiVersion;
 
-use logic::RobotRunner;
+use logic::{GameMode, MainOutput, RobotRunner};
 
 use anyhow::{anyhow, bail, Context};
 use itertools::Itertools;
@@ -85,6 +90,13 @@ enum Run {
         /// Specify a random seed for robot spawning. It can be of any length.
         #[structopt(long, parse(from_os_str))]
         seed: Option<OsString>,
+    },
+    /// Run a series of games in batch mode
+    /// Expected a list of `{red: "", blue: "", seed: ""}` strings as input.
+    /// Will write as output a series of `{winner: ""}` strings.
+    Batch {
+        #[structopt(long, parse(from_os_str))]
+        game_mode: Option<OsString>,
     },
     /// Run a battle and show the results in the normal web display
     ///
@@ -357,17 +369,6 @@ async fn try_main() -> anyhow::Result<()> {
                 game_mode: game_mode_string,
                 seed,
             } => {
-                let get_runner = |id| async move {
-                    let id = RobotId::parse(id).context("Couldn't parse robot identifier")?;
-                    let runner = Runner::from_id(&id).await?;
-                    Ok::<_, anyhow::Error>(runner)
-                };
-                let (blue, red) = tokio::try_join!(get_runner(&bluebot), get_runner(&redbot))?;
-                let runners = maplit::btreemap! {
-                    logic::Team::Blue => blue,
-                    logic::Team::Red => red,
-                };
-
                 let game_mode = match game_mode_string {
                     Some(s) => {
                         let s_json = format!("\"{}\"", s.to_str().unwrap());
@@ -376,21 +377,19 @@ async fn try_main() -> anyhow::Result<()> {
                     None => logic::GameMode::Normal,
                 };
 
-                let output = logic::run(
-                    runners,
-                    |turn_state| {
-                        if !raw && !results_only {
-                            display::display_turn(turn_state, !red_logs_only, !blue_logs_only)
-                                .expect("printing failed");
-                        }
+                let output = run_game(
+                    GameSpec {
+                        red: redbot.to_string_lossy().to_string(),
+                        blue: bluebot.to_string_lossy().to_string(),
+                        seed: seed.map(|k| k.to_string_lossy().to_string()),
                     },
-                    turn_num,
-                    true,
-                    None,
                     game_mode,
-                    seed.map(|s| s.to_string_lossy().into_owned()).as_deref(),
+                    !raw && !results_only,
+                    red_logs_only,
+                    blue_logs_only,
+                    turn_num,
                 )
-                .await;
+                .await?;
                 if raw {
                     let stdout = std::io::stdout();
                     serde_json::to_writer(stdout.lock(), &output).unwrap();
@@ -399,6 +398,28 @@ async fn try_main() -> anyhow::Result<()> {
                         println!("");
                     }
                     display::display_output(output)?;
+                }
+            }
+            Run::Batch { game_mode } => {
+                let game_mode = match game_mode {
+                    Some(s) => {
+                        let s_json = format!("\"{}\"", s.to_str().unwrap());
+                        serde_json::from_str::<logic::GameMode>(&s_json).expect("Unknown gamemode")
+                    }
+                    None => logic::GameMode::Normal,
+                };
+
+                let mut stdin = io::BufReader::new(io::stdin()).lines();
+                while let Some(line) = stdin.next_line().await.unwrap() {
+                    let game_spec: GameSpec = serde_json::from_str(&line).unwrap();
+
+                    let out = run_game(game_spec, game_mode, false, false, false, 100).await?;
+
+                    let mut value = serde_json::to_value(&out).unwrap();
+                    if let serde_json::Value::Object(v) = &mut value {
+                        v.retain(|key, _| ["winner"].contains(&key.as_str()))
+                    };
+                    println!("{}", serde_json::to_string(&value).unwrap());
                 }
             }
             Run::Web {
@@ -755,4 +776,59 @@ fn parse_published_slug(s: &str) -> Option<(Option<&str>, &str)> {
         None => (None, a),
     };
     Some(ret)
+}
+
+async fn run_game(
+    spec: GameSpec,
+    game_mode: GameMode,
+    display_turns: bool,
+    red_logs_only: bool,
+    blue_logs_only: bool,
+    turn_num: usize,
+) -> anyhow::Result<MainOutput> {
+    let setup_time_start = Instant::now();
+
+    let get_runner = |id| async move {
+        let id = RobotId::parse(id).context("Couldn't parse robot identifier")?;
+        let runner = Runner::from_id(&id).await?;
+        Ok::<_, anyhow::Error>(runner)
+    };
+    let blue_os: OsString = spec.blue.into();
+    let red_os: OsString = spec.red.into();
+    let (blue, red) = tokio::try_join!(get_runner(&blue_os), get_runner(&red_os))?;
+    let runners = maplit::btreemap! {
+        logic::Team::Blue => blue,
+        logic::Team::Red => red,
+    };
+
+    let setup_time_end = Instant::now();
+    eprintln!("Setup took {:?}", setup_time_end - setup_time_start);
+
+    let output = logic::run(
+        runners,
+        |turn_state| {
+            if display_turns {
+                display::display_turn(turn_state, !red_logs_only, !blue_logs_only)
+                    .expect("printing failed");
+            }
+        },
+        turn_num,
+        true,
+        None,
+        game_mode,
+        spec.seed.map(|s| s).as_deref(),
+    )
+    .await;
+
+    let game_end_time = Instant::now();
+    eprintln!("Game took {:?}", game_end_time - setup_time_end);
+
+    Ok(output)
+}
+
+#[derive(Deserialize)]
+struct GameSpec {
+    red: String,
+    blue: String,
+    seed: Option<String>,
 }
