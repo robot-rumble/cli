@@ -14,7 +14,7 @@ enum CompilationSource {
     Compiler {
         engine: wasmer::UniversalEngine,
         runners_dir: PathBuf,
-        jit_ext: &'static str,
+        universal_ext: &'static str,
         tunables: wasmer::BaseTunables,
     },
 }
@@ -37,7 +37,7 @@ fn main() {
             let target =
                 wasmer::Target::new(env::var("TARGET").unwrap().parse().unwrap(), features);
             let tunables = wasmer::BaseTunables::for_target(&target);
-            let jit_ext = wasmer::UniversalArtifact::get_default_extension(target.triple());
+            let universal_ext = wasmer::UniversalArtifact::get_default_extension(target.triple());
             let engine = wasmer::Universal::new(Compiler::new())
                 .target(target)
                 .engine();
@@ -48,7 +48,7 @@ fn main() {
             CompilationSource::Compiler {
                 engine,
                 runners_dir,
-                jit_ext,
+                universal_ext,
                 tunables,
             }
         }
@@ -64,21 +64,21 @@ fn main() {
     for (lang, runner) in &lang_runners {
         let (path, include_bin) = match &source {
             CompilationSource::Precompiled(dir) => {
-                let mut wjit = dir.join(runner);
-                wjit.set_extension("wjit");
-                (wjit, true)
+                let mut wasmu = dir.join(runner);
+                wasmu.set_extension("wasmu");
+                (wasmu, true)
             }
             #[cfg(any(feature = "build-cranelift", feature = "build-llvm"))]
             CompilationSource::Compiler {
                 engine,
                 runners_dir,
-                jit_ext,
+                universal_ext,
                 tunables,
             } => {
                 let mut src = runners_dir.join(runner);
                 src.set_extension("wasm");
                 let mut dst = out_dir.join(runner);
-                dst.set_extension(*jit_ext);
+                dst.set_extension(*universal_ext);
 
                 println!("compiling {}", runner);
 
