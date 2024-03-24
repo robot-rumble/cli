@@ -1,6 +1,10 @@
 on:
   release:
     types: [created]
+  push:
+    branches:
+      - master
+
 
 env:
   CARGO_TERM_COLOR: always
@@ -90,6 +94,8 @@ jobs:
 
       - if: matrix.os == 'ubuntu-22.04'
         run: |
+          wget "https://mirrors.kernel.org/ubuntu/pool/main/libf/libffi/libffi6_3.2.1-8_amd64.deb"
+          sudo apt install ./libffi6_3.2.1-8_amd64.deb
           wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
           sudo apt update
