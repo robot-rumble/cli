@@ -39,10 +39,10 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-20.04
+          - os: ubuntu-22.04
             cargoargs: --features build-llvm
-          # - os: macos-12
-          #   cargoargs: --features build-llvm
+          - os: macos-12
+            cargoargs: --features build-llvm
           # - os: windows-latest
           #   cargoargs: ''
 
@@ -85,19 +85,13 @@ jobs:
 
       - if: matrix.os == 'macos-12'
         run: |
-          wget https://github.com/macports/macports-base/releases/download/v2.7.1/MacPorts-2.7.1-12-Monterey.pkg
-          sudo installer -pkg ./MacPorts-2.7.1-12-Monterey.pkg -target /
-          sudo /opt/local/bin/port install llvm-10 
-          echo "LLVM_SYS_110_PREFIX=/opt/local/libexec/llvm-10" >> $GITHUB_ENV
+          brew install llvm@12
 
       - if: matrix.os == 'ubuntu-20.04'
         run: |
-          wget "https://mirrors.kernel.org/ubuntu/pool/main/libf/libffi/libffi6_3.2.1-8_amd64.deb"
-          sudo apt install ./libffi6_3.2.1-8_amd64.deb
-          wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo add-apt-repository 'deb http://apt.llvm.org/bionic/   llvm-toolchain-bionic-10  main' -y
+          sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
           sudo apt update
-          sudo apt install llvm-10 llvm-10-dev libllvm10 llvm-10-runtime
+          sudo apt install llvm llvm-dev libllvm llvm-runtime
 
       - run: cargo build --release --no-default-features ${{matrix.cargoargs}}
         env:
