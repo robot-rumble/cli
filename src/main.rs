@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use tokio::process::Command;
 use tokio::{io, time};
-use wasi_process::WasiProcess;
+use wasi_process2::WasiProcess;
 use wasmer_cache::{Cache, FileSystemCache};
 use wasmer_wasi::WasiVersion;
 
@@ -154,7 +154,7 @@ fn make_sourcedir_inline(source: &str) -> anyhow::Result<tempfile::TempDir> {
 }
 
 type WasiRunner =
-    TokioRunner<io::BufWriter<wasi_process::WasiStdin>, io::BufReader<wasi_process::WasiStdout>>;
+    TokioRunner<io::BufWriter<wasi_process2::WasiStdin>, io::BufReader<wasi_process2::WasiStdout>>;
 
 enum RunnerKind {
     Command(CommandRunner),
@@ -215,7 +215,7 @@ impl Runner {
         dir: tempfile::TempDir,
     ) -> anyhow::Result<logic::ProgramResult<Self>> {
         let mut state = wasmer_wasi::WasiState::new("robot");
-        wasi_process::add_stdio(&mut state);
+        wasi_process2::add_stdio(&mut state);
         state
             .preopen(|p| p.directory(&dir).alias("source").read(true))
             .unwrap()

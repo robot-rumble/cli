@@ -1,6 +1,7 @@
 use std::io::Write;
 use std::path::PathBuf;
 use std::{env, fs};
+use wasmer_engine::ArtifactCreate;
 
 #[cfg(feature = "build-cranelift")]
 use wasmer_compiler_cranelift::Cranelift as Compiler;
@@ -11,7 +12,7 @@ enum CompilationSource {
     Precompiled(PathBuf),
     #[cfg(any(feature = "build-cranelift", feature = "build-llvm"))]
     Compiler {
-        engine: wasmer::JITEngine,
+        engine: wasmer::UniversalEngine,
         runners_dir: PathBuf,
         jit_ext: &'static str,
         tunables: wasmer::BaseTunables,
@@ -36,8 +37,10 @@ fn main() {
             let target =
                 wasmer::Target::new(env::var("TARGET").unwrap().parse().unwrap(), features);
             let tunables = wasmer::BaseTunables::for_target(&target);
-            let jit_ext = wasmer::JITArtifact::get_default_extension(target.triple());
-            let engine = wasmer::JIT::new(Compiler::new()).target(target).engine();
+            let jit_ext = wasmer::UniversalArtifact::get_default_extension(target.triple());
+            let engine = wasmer::Universal::new(Compiler::new())
+                .target(target)
+                .engine();
 
             let runners_dir = fs::canonicalize("../logic/wasm-dist/lang-runners")
                 .expect("need to run logic/build-wasm.sh");
@@ -72,8 +75,6 @@ fn main() {
                 jit_ext,
                 tunables,
             } => {
-                use wasmer_engine::Artifact;
-
                 let mut src = runners_dir.join(runner);
                 src.set_extension("wasm");
                 let mut dst = out_dir.join(runner);
@@ -92,7 +93,7 @@ fn main() {
                 if needs_updating {
                     let wasm_source = fs::read(&src).unwrap();
                     let artifact =
-                        wasmer::JITArtifact::new(engine, &wasm_source, tunables).unwrap();
+                        wasmer::UniversalArtifact::new(engine, &wasm_source, tunables).unwrap();
 
                     fs::write(&dst, artifact.serialize().unwrap()).unwrap();
                 }
