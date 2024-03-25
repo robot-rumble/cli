@@ -25,8 +25,8 @@ jobs:
         run: |
           source ~/.wasmer/wasmer.sh
           for runner in lang-runners/*.wasm; do
-            wasmer compile --target x86_64-pc-windows-msvc --llvm "$runner" -o "${runner/.wasm/.wjit}"
-            rm "$runner"
+            wasmer compile --target x86_64-pc-windows-msvc --llvm "$runner" -o "${runner/.wasm/.wasmu}"
+            rm "$runner
           done
 
       - uses: actions/upload-artifact@v2
@@ -35,7 +35,7 @@ jobs:
           path: lang-runners/
 
   build:
-    # needs: compile_windows
+    needs: compile_windows
     runs-on: ${{ matrix.os }}
 
     strategy:
