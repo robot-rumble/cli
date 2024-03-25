@@ -286,6 +286,8 @@ impl Runner {
                 let sourcedir = make_sourcedir(source)?;
                 let store = &*STORE;
                 let (module, version) = lang.get_wasm(store)?;
+                // This is very strange, but this exactly println in this exact place is necessary to avoid
+                // error: "corrupted binary: misaligned metadata"
                 println!("IT worked");
                 Runner::new_wasm(store, module, version, &[], sourcedir).await
             }
@@ -636,6 +638,8 @@ impl Lang {
             }};
         }
         let lang = self;
+        // This is very strange, but this exactly println in this exact place is necessary to avoid
+        // error: "corrupted binary: misaligned metadata"
         println!("ATTEMPTING");
         Ok(include!(concat!(env!("OUT_DIR"), "/lang_runners.rs")))
     }
