@@ -375,7 +375,7 @@ async fn try_main() -> anyhow::Result<()> {
                 game_mode: game_mode_string,
                 seed,
             } => {
-                let game_mode = init_game_mode(game_mode_string);
+                let game_mode = parse_game_mode(game_mode_string);
                 let output = run_game(
                     GameSpec {
                         red: redbot.to_string_lossy().to_string(),
@@ -402,7 +402,7 @@ async fn try_main() -> anyhow::Result<()> {
             Run::Batch {
                 game_mode: game_mode_string,
             } => {
-                let game_mode = init_game_mode(game_mode_string);
+                let game_mode = parse_game_mode(game_mode_string);
                 let mut stdin = io::BufReader::new(io::stdin()).lines();
                 while let Some(line) = stdin.next_line().await.unwrap() {
                     match serde_json::from_str(&line) {
@@ -416,7 +416,7 @@ async fn try_main() -> anyhow::Result<()> {
                             println!("{}", serde_json::to_string(&value).unwrap());
                         }
                         Err(_) => {
-                            println!("Did not understand batch game specification. To abort, press Ctrl-c");
+                            println!("Did not understand batch game specification. For more info, call batch with --help. To abort, press Ctrl-c");
                         }
                     }
                 }
@@ -528,7 +528,7 @@ async fn try_main() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn init_game_mode(game_mode_string: Option<OsString>) -> logic::GameMode {
+fn parse_game_mode(game_mode_string: Option<OsString>) -> logic::GameMode {
     match game_mode_string {
         Some(s) => {
             let s_json = format!("\"{}\"", s.to_str().unwrap());
