@@ -42,11 +42,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-latest
-            cargoargs: ''
+            cargoargs: --features build-cranelift
           - os: macos-latest
-            cargoargs: ''
+            cargoargs: --features build-cranelift
           - os: windows-latest
-            cargoargs: ''
+            cargoargs: --features build-cranelift
 
     steps:
       - uses: actions/checkout@v2
