@@ -83,14 +83,14 @@ jobs:
         run: echo "COMPILED_RUNNERS=compiled_runners" >> $GITHUB_ENV
         shell: bash
 
-      - if: ${{ matrix.os == 'macos' && matrix.cargoargs == '--features build-llvm' }}
-        run: |
-          brew install llvm@12
-          echo "LLVM_SYS_120_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
-          echo 'LDFLAGS="-L/usr/local/opt/llvm@12/lib"' >> $GITHUB_ENV
-          echo 'CPPFLAGS="-I/usr/local/opt/llvm@12/include"' >> $GITHUB_ENV
+      # - if: matrix.os == 'macos'
+      #   run: |
+      #     brew install llvm@12
+      #     echo "LLVM_SYS_120_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
+      #     echo 'LDFLAGS="-L/usr/local/opt/llvm@12/lib"' >> $GITHUB_ENV
+      #     echo 'CPPFLAGS="-I/usr/local/opt/llvm@12/include"' >> $GITHUB_ENV
 
-      - if: ${{ matrix.os == 'ubuntu && matrix.cargoargs == '--features build-llvm' }}
+      - if: matrix.os == 'ubuntu
         run: |
           wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
           sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
