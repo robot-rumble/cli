@@ -1,8 +1,6 @@
 on:
   release:
     types: [created]
-  push:
-    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
@@ -51,10 +49,10 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      # - id: get_release
-      #   uses: bruceadams/get-release@v1.2.0
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - id: get_release
+        uses: bruceadams/get-release@v1.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/cache@v2
         with:
@@ -98,28 +96,29 @@ jobs:
       #     sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
       #     sudo apt update
       #     sudo apt install clang-format clang-tidy clang-tools clang clangd libc++-dev libc++1 libc++abi-dev libc++abi1 libclang-dev libclang1 liblldb-dev libllvm-ocaml-dev libomp-dev libomp5 lld lldb llvm-dev llvm-runtime llvm python3-clang 
+
       - run: cargo build --release --no-default-features ${{matrix.cargoargs}}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
-      # - if: matrix.os == 'windows-latest'
-      #   run: |
-      #     mkdir release
-      #     cp -Path target/release/rumblebot.exe -Destination release
-      #     cp -Path README.md -Destination release
+      - if: matrix.os == 'windows-latest'
+        run: |
+          mkdir release
+          cp -Path target/release/rumblebot.exe -Destination release
+          cp -Path README.md -Destination release
 
-      # - if: matrix.os == 'macos-12' || matrix.os == 'ubuntu-22.04'
-      #   run: |
-      #     mkdir release
-      #     cp target/release/rumblebot release
-      #     cp README.md release
+      - if: matrix.os == 'macos-12' || matrix.os == 'ubuntu-22.04'
+        run: |
+          mkdir release
+          cp target/release/rumblebot release
+          cp README.md release
 
-      # - run: 7z a release.zip ./release/*
-      # - uses: actions/upload-release-asset@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     upload_url: ${{ steps.get_release.outputs.upload_url }}
-      #     asset_path: release.zip
-      #     asset_name: rumblebot-${{ matrix.os }}.zip
-      #     asset_content_type: application/zip
+      - run: 7z a release.zip ./release/*
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: release.zip
+          asset_name: rumblebot-${{ matrix.os }}.zip
+          asset_content_type: application/zip
