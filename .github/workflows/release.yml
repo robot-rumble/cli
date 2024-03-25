@@ -40,7 +40,7 @@ jobs:
       matrix:
         include:
           - os: ubuntu
-            cargoargs: --features build-cranelift
+            cargoargs: --features build-llvm
           - os: macos
             cargoargs: --features build-cranelift
           - os: windows
@@ -83,19 +83,19 @@ jobs:
         run: echo "COMPILED_RUNNERS=compiled_runners" >> $GITHUB_ENV
         shell: bash
 
-      # - if: matrix.os == 'macos'
-      #   run: |
-      #     brew install llvm@12
-      #     echo "LLVM_SYS_120_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
-      #     echo 'LDFLAGS="-L/usr/local/opt/llvm@12/lib"' >> $GITHUB_ENV
-      #     echo 'CPPFLAGS="-I/usr/local/opt/llvm@12/include"' >> $GITHUB_ENV
+      - if: matrix.os == 'macos' && matrix.cargoargs == '--features build-llvm'
+        run: |
+          brew install llvm@12
+          echo "LLVM_SYS_120_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
+          echo 'LDFLAGS="-L/usr/local/opt/llvm@12/lib"' >> $GITHUB_ENV
+          echo 'CPPFLAGS="-I/usr/local/opt/llvm@12/include"' >> $GITHUB_ENV
 
-      # - if: matrix.os == 'ubuntu
-      #   run: |
-      #     wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-      #     sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
-      #     sudo apt update
-      #     sudo apt install clang-format clang-tidy clang-tools clang clangd libc++-dev libc++1 libc++abi-dev libc++abi1 libclang-dev libclang1 liblldb-dev libllvm-ocaml-dev libomp-dev libomp5 lld lldb llvm-dev llvm-runtime llvm python3-clang 
+      - if: matrix.os == 'ubuntu && matrix.cargoargs == '--features build-llvm'
+        run: |
+          wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
+          sudo apt update
+          sudo apt install clang-format clang-tidy clang-tools clang clangd libc++-dev libc++1 libc++abi-dev libc++abi1 libclang-dev libclang1 liblldb-dev libllvm-ocaml-dev libomp-dev libomp5 lld lldb llvm-dev llvm-runtime llvm python3-clang 
 
       - run: cargo build --release --no-default-features ${{matrix.cargoargs}}
         env:
