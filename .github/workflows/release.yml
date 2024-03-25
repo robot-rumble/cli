@@ -34,16 +34,16 @@ jobs:
 
   build:
     needs: compile_windows
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}-latest
 
     strategy:
       matrix:
         include:
-          - os: ubuntu-latest
+          - os: ubuntu
             cargoargs: --features build-cranelift
-          - os: macos-latest
+          - os: macos
             cargoargs: --features build-cranelift
-          - os: windows-latest
+          - os: windows
             cargoargs: --features build-cranelift
 
     steps:
@@ -73,24 +73,24 @@ jobs:
       - run: aws s3 sync s3://${{ secrets.S3_BUCKET_PUBLIC }}/lang-runners ../logic/wasm-dist/lang-runners
       - run: aws s3 sync s3://${{ secrets.S3_BUCKET_BUILD }}/cli-assets dist
 
-      - if: matrix.os == 'windows-latest'
+      - if: matrix.os == 'windows'
         uses: actions/download-artifact@v2
         with:
           name: windows-runners
           path: compiled_runners
 
-      - if: matrix.os == 'windows-latest'
+      - if: matrix.os == 'windows'
         run: echo "COMPILED_RUNNERS=compiled_runners" >> $GITHUB_ENV
         shell: bash
 
-      # - if: matrix.os == 'macos-12'
+      # - if: matrix.os == 'macos'
       #   run: |
       #     brew install llvm@12
       #     echo "LLVM_SYS_120_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
       #     echo 'LDFLAGS="-L/usr/local/opt/llvm@12/lib"' >> $GITHUB_ENV
       #     echo 'CPPFLAGS="-I/usr/local/opt/llvm@12/include"' >> $GITHUB_ENV
 
-      # - if: matrix.os == 'ubuntu-22.04'
+      # - if: matrix.os == 'ubuntu
       #   run: |
       #     wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
       #     sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
@@ -101,13 +101,13 @@ jobs:
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
-      - if: matrix.os == 'windows-latest'
+      - if: matrix.os == 'windows'
         run: |
           mkdir release
           cp -Path target/release/rumblebot.exe -Destination release
           cp -Path README.md -Destination release
 
-      - if: matrix.os == 'macos-12' || matrix.os == 'ubuntu-22.04'
+      - if: matrix.os == 'macos' || matrix.os == 'ubuntu'
         run: |
           mkdir release
           cp target/release/rumblebot release
