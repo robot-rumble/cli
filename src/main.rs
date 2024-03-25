@@ -710,7 +710,13 @@ impl RobotId {
                         source: source.to_owned(),
                     })
                 }
-                _ => bail!("unknown runner type {:?}", typ),
+                _ => {
+                    if typ.len() == 1 && typ.chars().next().unwrap().is_uppercase(){
+                        Self::from_path(PathBuf::from(s))
+                    } else {
+                        bail!("unknown runner type {:?}", typ)
+                    }
+                }
             }
         } else if let Some(published) = Self::from_published(s) {
             Ok(published)
