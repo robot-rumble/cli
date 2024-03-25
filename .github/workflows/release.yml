@@ -26,7 +26,7 @@ jobs:
           source ~/.wasmer/wasmer.sh
           for runner in lang-runners/*.wasm; do
             wasmer compile --target x86_64-pc-windows-msvc --llvm "$runner" -o "${runner/.wasm/.wasmu}"
-            rm "$runner
+            rm "$runner"
           done
 
       - uses: actions/upload-artifact@v2
