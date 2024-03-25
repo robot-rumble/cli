@@ -91,9 +91,15 @@ enum Run {
         #[structopt(long, parse(from_os_str))]
         seed: Option<OsString>,
     },
-    /// Run a series of games in batch mode
-    /// Expected a list of `{red: "", blue: "", seed: ""}` strings as input.
-    /// Will write as output a series of `{winner: ""}` strings.
+    /// Run a continuous series of games 
+    ///
+    /// Like `term`, but allows for running an indefinite number of games. This saves time because
+    /// this means that there is no need to initialize rumblebot from scratch for every game.
+    /// Expects inputs of the form `{"red": "...", "blue": "...", "seed": "(optional)", "turn_num": (optional) }`.
+    /// For each input, `batch` simulates the game, prints the winner, and then waits for the next
+    /// input. 
+    ///
+    /// For instructions on how to specify robots, see the help page for `run`.
     Batch {
         #[structopt(long, parse(from_os_str))]
         game_mode: Option<OsString>,
@@ -369,25 +375,18 @@ async fn try_main() -> anyhow::Result<()> {
                 game_mode: game_mode_string,
                 seed,
             } => {
-                let game_mode = match game_mode_string {
-                    Some(s) => {
-                        let s_json = format!("\"{}\"", s.to_str().unwrap());
-                        serde_json::from_str::<logic::GameMode>(&s_json).expect("Unknown gamemode")
-                    }
-                    None => logic::GameMode::Normal,
-                };
-
+                let game_mode = init_game_mode(game_mode_string);
                 let output = run_game(
                     GameSpec {
                         red: redbot.to_string_lossy().to_string(),
                         blue: bluebot.to_string_lossy().to_string(),
                         seed: seed.map(|k| k.to_string_lossy().to_string()),
+                        turn_num: Some(turn_num)
                     },
                     game_mode,
                     !raw && !results_only,
                     red_logs_only,
                     blue_logs_only,
-                    turn_num,
                 )
                 .await?;
                 if raw {
@@ -400,26 +399,26 @@ async fn try_main() -> anyhow::Result<()> {
                     display::display_output(output)?;
                 }
             }
-            Run::Batch { game_mode } => {
-                let game_mode = match game_mode {
-                    Some(s) => {
-                        let s_json = format!("\"{}\"", s.to_str().unwrap());
-                        serde_json::from_str::<logic::GameMode>(&s_json).expect("Unknown gamemode")
-                    }
-                    None => logic::GameMode::Normal,
-                };
-
+            Run::Batch {
+                game_mode: game_mode_string,
+            } => {
+                let game_mode = init_game_mode(game_mode_string);
                 let mut stdin = io::BufReader::new(io::stdin()).lines();
                 while let Some(line) = stdin.next_line().await.unwrap() {
-                    let game_spec: GameSpec = serde_json::from_str(&line).unwrap();
+                    match serde_json::from_str(&line) {
+                        Ok(game_spec) => {
+                            let out = run_game(game_spec, game_mode, false, false, false).await?;
 
-                    let out = run_game(game_spec, game_mode, false, false, false, 100).await?;
-
-                    let mut value = serde_json::to_value(&out).unwrap();
-                    if let serde_json::Value::Object(v) = &mut value {
-                        v.retain(|key, _| ["winner"].contains(&key.as_str()))
-                    };
-                    println!("{}", serde_json::to_string(&value).unwrap());
+                            let mut value = serde_json::to_value(&out).unwrap();
+                            if let serde_json::Value::Object(v) = &mut value {
+                                v.retain(|key, _| ["winner"].contains(&key.as_str()))
+                            };
+                            println!("{}", serde_json::to_string(&value).unwrap());
+                        }
+                        Err(_) => {
+                            println!("Did not understand batch game specification. To abort, press Ctrl-c");
+                        }
+                    }
                 }
             }
             Run::Web {
@@ -527,6 +526,16 @@ async fn try_main() -> anyhow::Result<()> {
     }
 
     Ok(())
+}
+
+fn init_game_mode(game_mode_string: Option<OsString>) -> logic::GameMode {
+    match game_mode_string {
+        Some(s) => {
+            let s_json = format!("\"{}\"", s.to_str().unwrap());
+            serde_json::from_str::<logic::GameMode>(&s_json).expect("Unknown gamemode")
+        }
+        None => logic::GameMode::Normal,
+    }
 }
 
 fn robot_name_from_path(path: &Path) -> anyhow::Result<&str> {
@@ -784,7 +793,6 @@ async fn run_game(
     display_turns: bool,
     red_logs_only: bool,
     blue_logs_only: bool,
-    turn_num: usize,
 ) -> anyhow::Result<MainOutput> {
     let setup_time_start = Instant::now();
 
@@ -812,7 +820,7 @@ async fn run_game(
                     .expect("printing failed");
             }
         },
-        turn_num,
+        spec.turn_num.unwrap_or(100),
         true,
         None,
         game_mode,
@@ -831,4 +839,5 @@ struct GameSpec {
     red: String,
     blue: String,
     seed: Option<String>,
+    turn_num: Option<usize>
 }
