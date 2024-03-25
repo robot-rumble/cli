@@ -268,6 +268,7 @@ impl Runner {
                 let sourcedir = make_sourcedir(source)?;
                 let store = &*STORE;
                 let (module, version) = lang.get_wasm(store)?;
+                println!("IT worked");
                 Runner::new_wasm(store, module, version, &[], sourcedir).await
             }
             RobotId::Command { command, args } => {
@@ -537,7 +538,7 @@ fn directories() -> anyhow::Result<&'static directories::ProjectDirs> {
     })
 }
 
-#[derive(Clone, Copy, serde::Deserialize, strum::EnumString, strum::AsRefStr)]
+#[derive(Clone, Copy, Debug, serde::Deserialize, strum::EnumString, strum::AsRefStr)]
 pub enum Lang {
     Python,
     Javascript,
@@ -605,6 +606,7 @@ impl Lang {
             }};
         }
         let lang = self;
+        println!("ATTEMPTING");
         Ok(include!(concat!(env!("OUT_DIR"), "/lang_runners.rs")))
     }
 }

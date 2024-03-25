@@ -98,7 +98,7 @@ fn main() {
                     fs::write(&dst, artifact.serialize().unwrap()).unwrap();
                 }
 
-                (dst, cfg!(feature = "build-llvm"))
+                (dst, !cfg!(debug_assertions))
             }
         };
 
@@ -115,7 +115,7 @@ fn main() {
             if include_bin {
                 ""
             } else {
-                r#".expect("should compile with --features=build-llvm when distributing")"#
+                r#".expect("Error loading runtime file, if this is a production build then include_bin should have been set to true")"#
             }
         )
         .unwrap();
