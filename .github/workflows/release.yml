@@ -1,6 +1,8 @@
 on:
   release:
     types: [created]
+  push:
+    branches: [master]
 
 env:
   CARGO_TERM_COLOR: always
@@ -39,12 +41,12 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: ubuntu-22.04
-            cargoargs: --features build-llvm
-          # - os: macos-12
-          #   cargoargs: --features build-llvm
-          # - os: windows-latest
-          #   cargoargs: ''
+          - os: ubuntu-latest
+            cargoargs: ''
+          - os: macos-latest
+            cargoargs: ''
+          - os: windows-latest
+            cargoargs: ''
 
     steps:
       - uses: actions/checkout@v2
@@ -54,14 +56,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # - uses: actions/cache@v2
-      #   with:
-      #     path: ~/.cargo
-      #     key: cargo-${{ matrix.os }}-${{ hashFiles('Cargo.lock') }}
-      # - uses: actions/cache@v2
-      #   with:
-      #     path: target
-      #     key: build-${{ matrix.os }}
+      - uses: actions/cache@v2
+        with:
+          path: ~/.cargo
+          key: cargo-${{ matrix.os }}-${{ hashFiles('Cargo.lock') }}
+      - uses: actions/cache@v2
+        with:
+          path: target
+          key: build-${{ matrix.os }}
 
       - uses: aws-actions/configure-aws-credentials@v1
         with:
@@ -83,41 +85,41 @@ jobs:
         run: echo "COMPILED_RUNNERS=compiled_runners" >> $GITHUB_ENV
         shell: bash
 
-      - if: matrix.os == 'macos-12'
-        run: |
-          brew install llvm@12
-          echo "LLVM_SYS_120_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
-          echo 'LDFLAGS="-L/usr/local/opt/llvm@12/lib"' >> $GITHUB_ENV
-          echo 'CPPFLAGS="-I/usr/local/opt/llvm@12/include"' >> $GITHUB_ENV
+      # - if: matrix.os == 'macos-12'
+      #   run: |
+      #     brew install llvm@12
+      #     echo "LLVM_SYS_120_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
+      #     echo 'LDFLAGS="-L/usr/local/opt/llvm@12/lib"' >> $GITHUB_ENV
+      #     echo 'CPPFLAGS="-I/usr/local/opt/llvm@12/include"' >> $GITHUB_ENV
 
-      - if: matrix.os == 'ubuntu-22.04'
-        run: |
-          wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
-          sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
-          sudo apt update
-          sudo apt install clang-format clang-tidy clang-tools clang clangd libc++-dev libc++1 libc++abi-dev libc++abi1 libclang-dev libclang1 liblldb-dev libllvm-ocaml-dev libomp-dev libomp5 lld lldb llvm-dev llvm-runtime llvm python3-clang 
+      # - if: matrix.os == 'ubuntu-22.04'
+      #   run: |
+      #     wget --no-check-certificate -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+      #     sudo add-apt-repository 'deb http://apt.llvm.org/focal/   llvm-toolchain-focal-12  main' -y
+      #     sudo apt update
+      #     sudo apt install clang-format clang-tidy clang-tools clang clangd libc++-dev libc++1 libc++abi-dev libc++abi1 libclang-dev libclang1 liblldb-dev libllvm-ocaml-dev libomp-dev libomp5 lld lldb llvm-dev llvm-runtime llvm python3-clang 
       - run: cargo build --release --no-default-features ${{matrix.cargoargs}}
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
-      - if: matrix.os == 'windows-latest'
-        run: |
-          mkdir release
-          cp -Path target/release/rumblebot.exe -Destination release
-          cp -Path README.md -Destination release
+      # - if: matrix.os == 'windows-latest'
+      #   run: |
+      #     mkdir release
+      #     cp -Path target/release/rumblebot.exe -Destination release
+      #     cp -Path README.md -Destination release
 
-      - if: matrix.os == 'macos-12' || matrix.os == 'ubuntu-22.04'
-        run: |
-          mkdir release
-          cp target/release/rumblebot release
-          cp README.md release
+      # - if: matrix.os == 'macos-12' || matrix.os == 'ubuntu-22.04'
+      #   run: |
+      #     mkdir release
+      #     cp target/release/rumblebot release
+      #     cp README.md release
 
-      - run: 7z a release.zip ./release/*
-      - uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.get_release.outputs.upload_url }}
-          asset_path: release.zip
-          asset_name: rumblebot-${{ matrix.os }}.zip
-          asset_content_type: application/zip
+      # - run: 7z a release.zip ./release/*
+      # - uses: actions/upload-release-asset@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     upload_url: ${{ steps.get_release.outputs.upload_url }}
+      #     asset_path: release.zip
+      #     asset_name: rumblebot-${{ matrix.os }}.zip
+      #     asset_content_type: application/zip
