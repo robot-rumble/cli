@@ -44,7 +44,7 @@ jobs:
           - os: macos
             cargoargs: --features build-cranelift,jemalloc
           - os: windows
-            cargoargs: --features build-cranelift
+            cargoargs: --features build-cranelift,mimalloc
 
     steps:
       - uses: actions/checkout@v2

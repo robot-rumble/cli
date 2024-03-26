@@ -3,6 +3,7 @@ name = "rumblebot"
 version = "0.1.0"
 authors = ["Anton <antonoutkine@gmail.com>", "Noa <coolreader18@gmail.com>"]
 edition = "2018"
+mutually_exclusive_features = ["jemalloc", "mimalloc"]
 
 [dependencies]
 logic = { path = "../logic/logic" }
@@ -53,12 +54,14 @@ textwrap = { version = "0.16", default-features = false }
 
 sentry = "0.32.2"
 jemallocator = { version = "0.5.4", optional = true }
+mimalloc = { version = "*", default-features = false, optional = true }
 
 [features]
-default = ["build-cranelift", "jemallocator"]
+default = ["build-cranelift", "jemalloc"]
 build-cranelift = ["wasmer-compiler-cranelift"]
 build-llvm = ["wasmer-compiler-llvm", "inkwell", "llvm-sys-120"]
 jemalloc = ["jemallocator"]
+mimalloc = ["dep:mimalloc"]
 
 [build-dependencies]
 wasmer = { version = "2.0", default-features = false, features = ["universal"] }
