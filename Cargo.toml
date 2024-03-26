@@ -52,12 +52,13 @@ termcolor = "1.4"
 textwrap = { version = "0.16", default-features = false }
 
 sentry = "0.32.2"
-jemallocator = "0.5.4"
+jemallocator = { version = "0.5.4", optional = true }
 
 [features]
-default = ["build-cranelift"]
+default = ["build-cranelift", "jemallocator"]
 build-cranelift = ["wasmer-compiler-cranelift"]
 build-llvm = ["wasmer-compiler-llvm", "inkwell", "llvm-sys-120"]
+jemalloc = ["jemallocator"]
 
 [build-dependencies]
 wasmer = { version = "2.0", default-features = false, features = ["universal"] }

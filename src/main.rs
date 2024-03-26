@@ -26,6 +26,7 @@ mod api;
 mod display;
 mod server;
 
+#[cfg(feature = "jemalloc")]
 #[global_allocator]
 static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
 
