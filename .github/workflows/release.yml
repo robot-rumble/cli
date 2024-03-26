@@ -40,9 +40,9 @@ jobs:
       matrix:
         include:
           - os: ubuntu
-            cargoargs: --features build-llvm jemalloc
+            cargoargs: --features build-llvm,jemalloc
           - os: macos
-            cargoargs: --features build-cranelift jemalloc
+            cargoargs: --features build-cranelift,jemalloc
           - os: windows
             cargoargs: --features build-cranelift
 
