@@ -636,6 +636,7 @@ impl Lang {
             ($bytes:expr) => {{
                 static MODULE: OnceCell<(wasmer::Module, WasiVersion)> = OnceCell::new();
                 let (module, version) = MODULE.get_or_try_init(|| {
+                    std::thread::sleep(std::time::Duration::from_millis(100));
                     let module = unsafe { wasmer::Module::deserialize(store, $bytes)? };
                     let version = wasmer_wasi::get_wasi_version(&module, false)
                         .unwrap_or(WasiVersion::Latest);
