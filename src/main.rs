@@ -11,9 +11,10 @@ use tokio::{
     io::{self, AsyncBufReadExt},
     time,
 };
-use wasi_process2::WasiProcess;
 use wasmer_cache::{Cache, FileSystemCache};
-use wasmer_wasi::WasiVersion;
+use wasi_process2::WasiProcess;
+use wasmer_wasi::{WasiState, WasiVersion, WasiEnv};
+use wasmer::{AsStoreMut, AsStoreRef, Instance, FunctionEnv};
 
 use logic::{GameMode, MainOutput, RobotRunner};
 
@@ -239,14 +240,14 @@ impl Runner {
             .unwrap()
             .args(args)
             .arg("/source/sourcecode");
-        let env = wasmer_wasi::WasiEnv::new(state.build()?);
+        let env = FunctionEnv::new(&mut STORE.as_store_mut(), WasiEnv::new(state.build()?));
         let instance = {
             // imports isn't Send
-            let imports = wasmer_wasi::generate_import_object_from_env(store, env, version);
-            wasmer::Instance::new(module, &imports)?
+            let imports = wasmer_wasi::generate_import_object_from_env(&mut store.as_store_mut(), &env, version);
+            wasmer::Instance::new(&mut store.as_store_mut(), module, &imports)?
         };
         let memory = instance.exports.get::<wasmer::Memory>("memory").unwrap();
-        let mut proc = WasiProcess::new(&instance, Default::default())?;
+        let mut proc = WasiProcess::new(&mut store, &instance, Default::default())?;
 
         let stdin = io::BufWriter::new(proc.stdin.take().unwrap());
         let stdout = io::BufReader::new(proc.stdout.take().unwrap());
@@ -325,7 +326,7 @@ impl Runner {
 }
 
 static STORE: Lazy<wasmer::Store> = Lazy::new(|| {
-    let engine = wasmer::UniversalEngine::headless();
+    let engine = wasmer::Engine::headless();
     wasmer::Store::new(&engine)
 });
 

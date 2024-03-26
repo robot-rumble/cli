@@ -1,7 +1,7 @@
 use std::io::Write;
 use std::path::PathBuf;
 use std::{env, fs};
-use wasmer_engine::ArtifactCreate;
+use wasmer_compiler::ArtifactCreate;
 
 #[cfg(feature = "build-cranelift")]
 use wasmer_compiler_cranelift::Cranelift as Compiler;
@@ -12,9 +12,8 @@ enum CompilationSource {
     Precompiled(PathBuf),
     #[cfg(any(feature = "build-cranelift", feature = "build-llvm"))]
     Compiler {
-        engine: wasmer::UniversalEngine,
+        engine: wasmer::Engine,
         runners_dir: PathBuf,
-        universal_ext: &'static str,
         tunables: wasmer::BaseTunables,
     },
 }
@@ -37,10 +36,7 @@ fn main() {
             let target =
                 wasmer::Target::new(env::var("TARGET").unwrap().parse().unwrap(), features);
             let tunables = wasmer::BaseTunables::for_target(&target);
-            let universal_ext = wasmer::UniversalArtifact::get_default_extension(target.triple());
-            let engine = wasmer::Universal::new(Compiler::new())
-                .target(target)
-                .engine();
+            let engine = wasmer::EngineBuilder::new(Compiler::default()).engine();
 
             let runners_dir = fs::canonicalize("../logic/wasm-dist/lang-runners")
                 .expect("need to run logic/build-wasm.sh");
@@ -48,7 +44,6 @@ fn main() {
             CompilationSource::Compiler {
                 engine,
                 runners_dir,
-                universal_ext,
                 tunables,
             }
         }
@@ -72,13 +67,12 @@ fn main() {
             CompilationSource::Compiler {
                 engine,
                 runners_dir,
-                universal_ext,
                 tunables,
             } => {
                 let mut src = runners_dir.join(runner);
                 src.set_extension("wasm");
                 let mut dst = out_dir.join(runner);
-                dst.set_extension(*universal_ext);
+                dst.set_extension("wasmu");
 
                 println!("compiling {}", runner);
 
@@ -93,7 +87,7 @@ fn main() {
                 if needs_updating {
                     let wasm_source = fs::read(&src).unwrap();
                     let artifact =
-                        wasmer::UniversalArtifact::new(engine, &wasm_source, tunables).unwrap();
+                        wasmer::Artifact::new(engine, &wasm_source, tunables).unwrap();
 
                     fs::write(&dst, artifact.serialize().unwrap()).unwrap();
                 }
@@ -109,7 +103,7 @@ fn main() {
             if include_bin {
                 "include_bytes!"
             } else {
-                "&std::fs::read"
+                "std::fs::read"
             },
             path,
             if include_bin {
