@@ -52,6 +52,7 @@ termcolor = "1.4"
 textwrap = { version = "0.16", default-features = false }
 
 sentry = "0.32.2"
+jemallocator = "0.5.4"
 
 [features]
 default = ["build-cranelift"]

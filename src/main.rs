@@ -26,6 +26,9 @@ mod api;
 mod display;
 mod server;
 
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 #[tokio::main]
 async fn main() {
     env_logger::init();
@@ -288,7 +291,6 @@ impl Runner {
                 let (module, version) = lang.get_wasm(store)?;
                 // This is very strange, but this exactly println in this exact place is necessary to avoid
                 // error: "corrupted binary: misaligned metadata"
-                println!("IT worked");
                 Runner::new_wasm(store, module, version, &[], sourcedir).await
             }
             RobotId::Command { command, args } => {
@@ -638,9 +640,6 @@ impl Lang {
             }};
         }
         let lang = self;
-        // This is very strange, but this exactly println in this exact place is necessary to avoid
-        // error: "corrupted binary: misaligned metadata"
-        println!("ATTEMPTING");
         Ok(include!(concat!(env!("OUT_DIR"), "/lang_runners.rs")))
     }
 }
