@@ -11,9 +11,10 @@ use tokio::{
     io::{self, AsyncBufReadExt},
     time,
 };
-use wasi_process2::WasiProcess;
 use wasmer_cache::{Cache, FileSystemCache};
-use wasmer_wasi::WasiVersion;
+use wasi_process2::WasiProcess;
+use wasmer_wasi::{WasiFunctionEnv, WasiVersion, WasiEnv};
+use wasmer::{AsStoreMut, AsStoreRef, Instance, FunctionEnv};
 
 use logic::{GameMode, MainOutput, RobotRunner};
 
@@ -188,7 +189,6 @@ enum RunnerKind {
         runner: WasiRunner,
         /// the directory that we store the source file in; we need to keep it open
         _dir: tempfile::TempDir,
-        memory: wasmer::Memory,
     },
 }
 
@@ -204,12 +204,11 @@ impl RobotRunner for Runner {
         let inner = async move {
             match kind {
                 RunnerKind::Command(r) => r.run(input).await,
-                RunnerKind::Wasi { runner, memory, .. } => {
+                RunnerKind::Wasi { runner, .. } => {
                     log::debug!(
-                        "start of turn {} w/ {} units: {:?} allocated",
+                        "start of turn {} w/ {} units",
                         input.state.turn,
                         input.state.objs.len(),
-                        memory.size()
                     );
                     runner.run(input).await
                 }
@@ -234,7 +233,6 @@ impl Runner {
     }
 
     async fn new_wasm(
-        store: &wasmer::Store,
         module: &wasmer::Module,
         version: WasiVersion,
         args: &[String],
@@ -247,14 +245,17 @@ impl Runner {
             .unwrap()
             .args(args)
             .arg("/source/sourcecode");
-        let env = wasmer_wasi::WasiEnv::new(state.build()?);
-        let instance = {
-            // imports isn't Send
-            let imports = wasmer_wasi::generate_import_object_from_env(store, env, version);
-            wasmer::Instance::new(module, &imports)?
+        let mut proc = unsafe {
+            let wasi_env = WasiEnv::new(state.build()?);
+            let mut env = WasiFunctionEnv::new(&mut STORE.as_store_mut(), wasi_env);
+            let instance = {
+                // imports isn't Send
+                let imports = wasmer_wasi::generate_import_object_from_env(&mut STORE.as_store_mut(), &env.env, version);
+                wasmer::Instance::new(&mut STORE.as_store_mut(), module, &imports)?
+            };
+            env.initialize(&mut STORE.as_store_mut(), &instance)?;
+            WasiProcess::new(&mut STORE, &instance, Default::default())?
         };
-        let memory = instance.exports.get::<wasmer::Memory>("memory").unwrap();
-        let mut proc = WasiProcess::new(&instance, Default::default())?;
 
         let stdin = io::BufWriter::new(proc.stdin.take().unwrap());
         let stdout = io::BufReader::new(proc.stdout.take().unwrap());
@@ -270,7 +271,6 @@ impl Runner {
             kind: RunnerKind::Wasi {
                 runner,
                 _dir: dir,
-                memory: memory.clone(),
             },
             timeout: None,
         });
@@ -286,17 +286,13 @@ impl Runner {
                     anyhow!("robot {}/{} has no open source published code", user, robot)
                 })?;
                 let sourcedir = make_sourcedir_inline(&code)?;
-                let store = &*STORE;
-                let (module, version) = info.lang.get_wasm(store)?;
-                Runner::new_wasm(store, module, version, &[], sourcedir).await
+                let (module, version) = info.lang.get_wasm()?;
+                Runner::new_wasm(module, version, &[], sourcedir).await
             }
             RobotId::Local { source, lang } => {
                 let sourcedir = make_sourcedir(source)?;
-                let store = &*STORE;
-                let (module, version) = lang.get_wasm(store)?;
-                // This is very strange, but this exactly println in this exact place is necessary to avoid
-                // error: "corrupted binary: misaligned metadata"
-                Runner::new_wasm(store, module, version, &[], sourcedir).await
+                let (module, version) = lang.get_wasm()?;
+                Runner::new_wasm(module, version, &[], sourcedir).await
             }
             RobotId::Command { command, args } => {
                 let mut cmd = Command::new(command);
@@ -316,23 +312,21 @@ impl Runner {
                 let wasm = tokio::fs::read(runner)
                     .await
                     .with_context(|| format!("couldn't read {}", runner))?;
-                let store = &*STORE;
-                let (module, version) = wasm_from_cache_or_compile(store, &wasm)
+                let (module, version) = wasm_from_cache_or_compile(&wasm)
                     .with_context(|| format!("couldn't compile wasm module at {}", runner))?;
-                Runner::new_wasm(store, &module, version, &runner_args, sourcedir).await
+                Runner::new_wasm(&module, version, &runner_args, sourcedir).await
             }
             RobotId::Inline { lang, source } => {
                 let sourcedir = make_sourcedir_inline(source)?;
-                let store = &*STORE;
-                let (module, version) = lang.get_wasm(store)?;
-                Runner::new_wasm(store, module, version, &[], sourcedir).await
+                let (module, version) = lang.get_wasm()?;
+                Runner::new_wasm(module, version, &[], sourcedir).await
             }
         }
     }
 }
 
-static STORE: Lazy<wasmer::Store> = Lazy::new(|| {
-    let engine = wasmer::UniversalEngine::headless();
+static mut STORE: Lazy<wasmer::Store> = Lazy::new(|| {
+    let engine = wasmer::Engine::headless();
     wasmer::Store::new(&engine)
 });
 
@@ -589,7 +583,6 @@ fn get_wasm_cache() -> anyhow::Result<FileSystemCache> {
 }
 
 fn wasm_from_cache_or_compile(
-    store: &wasmer::Store,
     wasm: &[u8],
 ) -> anyhow::Result<(wasmer::Module, WasiVersion)> {
     let module = match get_wasm_cache() {
@@ -597,17 +590,17 @@ fn wasm_from_cache_or_compile(
             let hash = wasmer_cache::Hash::generate(wasm);
             // unsafe because wasmer loads arbitrary code from this directory, but the wasmer
             // cli does the same thing, and there's no cve for it ¯\_(ツ)_/¯
-            let module = unsafe { cache.load(store, hash) };
+            let module = unsafe { cache.load(&*STORE, hash) };
             match module {
                 Ok(m) => m,
                 Err(_) => {
-                    let module = wasmer::Module::new(store, wasm)?;
+                    let module = unsafe { wasmer::Module::new(&*STORE, wasm)? };
                     let _ = cache.store(hash, &module);
                     module
                 }
             }
         }
-        Err(_) => wasmer::Module::new(store, wasm)?,
+        Err(_) => unsafe { wasmer::Module::new(&*STORE, wasm)? }
     };
     let version = wasmer_wasi::get_wasi_version(&module, false).unwrap_or(WasiVersion::Latest);
     Ok((module, version))
@@ -629,15 +622,13 @@ impl Lang {
         }
     }
     fn get_wasm(
-        self,
-        store: &wasmer::Store,
+        self
     ) -> anyhow::Result<(&'static wasmer::Module, WasiVersion)> {
         macro_rules! lang_runner {
             ($bytes:expr) => {{
                 static MODULE: OnceCell<(wasmer::Module, WasiVersion)> = OnceCell::new();
                 let (module, version) = MODULE.get_or_try_init(|| {
-                    std::thread::sleep(std::time::Duration::from_millis(100));
-                    let module = unsafe { wasmer::Module::deserialize(store, $bytes)? };
+                    let module = unsafe { wasmer::Module::deserialize(&*STORE, $bytes)? };
                     let version = wasmer_wasi::get_wasi_version(&module, false)
                         .unwrap_or(WasiVersion::Latest);
                     Ok::<_, anyhow::Error>((module, version))
