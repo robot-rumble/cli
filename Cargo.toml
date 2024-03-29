@@ -26,7 +26,7 @@ reqwest = { version = "0.12", features = [
 ] }
 
 native-runner = { path = "../logic/env-runners/native" }
-wasi-process2 = "0.3"
+wasi-process2 = "=0.3.5"
 wasmer = { version = "3", default-features = false }
 wasmer-cache = "3"
 wasmer-wasi = "3"
