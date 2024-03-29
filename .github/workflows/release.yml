@@ -8,53 +8,53 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # compile_windows:
-  #   runs-on: ubuntu-latest
+  compile_windows:
+    runs-on: ubuntu-latest
 
-  #   steps:
-  #     - run: curl https://get.wasmer.io -sSfL | sh
+    steps:
+      - run: curl https://get.wasmer.io -sSfL | sh
 
-  #     - uses: aws-actions/configure-aws-credentials@v1
-  #       with:
-  #         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-  #         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-  #         aws-region: us-east-1
-  #     - run: aws s3 sync s3://${{ secrets.S3_BUCKET_PUBLIC }}/lang-runners lang-runners
+      - uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - run: aws s3 sync s3://${{ secrets.S3_BUCKET_PUBLIC }}/lang-runners lang-runners
 
-  #     - name: Compile windows runners
-  #       run: |
-  #         source ~/.wasmer/wasmer.sh
-  #         for runner in lang-runners/*.wasm; do
-  #           wasmer compile --target x86_64-pc-windows-msvc --llvm "$runner" -o "${runner/.wasm/.wasmu}"
-  #           rm "$runner"
-  #         done
+      - name: Compile windows runners
+        run: |
+          source ~/.wasmer/wasmer.sh
+          for runner in lang-runners/*.wasm; do
+            wasmer compile --target x86_64-pc-windows-msvc --llvm "$runner" -o "${runner/.wasm/.wasmu}"
+            rm "$runner"
+          done
 
-  #     - uses: actions/upload-artifact@v2
-  #       with:
-  #         name: windows-runners
-  #         path: lang-runners/
+      - uses: actions/upload-artifact@v2
+        with:
+          name: windows-runners
+          path: lang-runners/
 
   build:
-    # needs: compile_windows
+    needs: compile_windows
     runs-on: ${{ matrix.os }}-latest
 
     strategy:
       matrix:
         include:
-          # - os: ubuntu
-          #   cargoargs: --features build-llvm,jemalloc
+          - os: ubuntu
+            cargoargs: --features build-llvm,jemalloc
           - os: macos
             cargoargs: --features build-llvm,jemalloc
-          # - os: windows
-          #   cargoargs: --features build-cranelift,mimalloc
+          - os: windows
+            cargoargs: --features build-cranelift,mimalloc
 
     steps:
       - uses: actions/checkout@v2
 
-      # - id: get_release
-      #   uses: bruceadams/get-release@v1.2.0
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - id: get_release
+        uses: bruceadams/get-release@v1.2.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: actions/cache@v2
         with:
@@ -103,24 +103,24 @@ jobs:
         env:
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
 
-      # - if: matrix.os == 'windows'
-      #   run: |
-      #     mkdir release
-      #     cp -Path target/release/rumblebot.exe -Destination release
-      #     cp -Path README.md -Destination release
+      - if: matrix.os == 'windows'
+        run: |
+          mkdir release
+          cp -Path target/release/rumblebot.exe -Destination release
+          cp -Path README.md -Destination release
 
-      # - if: matrix.os == 'macos' || matrix.os == 'ubuntu'
-      #   run: |
-      #     mkdir release
-      #     cp target/release/rumblebot release
-      #     cp README.md release
+      - if: matrix.os == 'macos' || matrix.os == 'ubuntu'
+        run: |
+          mkdir release
+          cp target/release/rumblebot release
+          cp README.md release
 
-      # - run: 7z a release.zip ./release/*
-      # - uses: actions/upload-release-asset@v1
-      #   env:
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #   with:
-      #     upload_url: ${{ steps.get_release.outputs.upload_url }}
-      #     asset_path: release.zip
-      #     asset_name: rumblebot-${{ matrix.os }}.zip
-      #     asset_content_type: application/zip
+      - run: 7z a release.zip ./release/*
+      - uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.get_release.outputs.upload_url }}
+          asset_path: release.zip
+          asset_name: rumblebot-${{ matrix.os }}.zip
+          asset_content_type: application/zip
