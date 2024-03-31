@@ -14,7 +14,7 @@ use tokio::{
 use wasmer_cache::{Cache, FileSystemCache};
 use wasi_process2::WasiProcess;
 use wasmer_wasi::{WasiFunctionEnv, WasiVersion, WasiEnv};
-use wasmer::{AsStoreMut, AsStoreRef, Instance, FunctionEnv};
+use wasmer::AsStoreMut;
 
 use logic::{GameMode, MainOutput, RobotRunner};
 
@@ -72,6 +72,9 @@ enum Run {
     ///     It will then start receiving newline-delimited `ProgramInput` json object. It must respond to
     ///     each one with a `ProgramOutput` json object followed by a newline. The match is over when stdin is closed, and
     ///     the process may be forcefully terminated after that.
+    ///
+    /// Please note: `run term` will not display runtime errors. In order to see these, please use
+    /// `run web`
     #[structopt(verbatim_doc_comment)]
     Term {
         #[structopt(parse(from_os_str))]
@@ -86,6 +89,9 @@ enum Run {
         raw: bool,
         /// Show only the blue robot's logs
         #[structopt(long)]
+        no_logs: bool,
+        /// Show only the blue robot's logs
+        #[structopt(long)]
         blue_logs_only: bool,
         /// Show only the red robot's logs
         #[structopt(long)]
@@ -93,7 +99,7 @@ enum Run {
         /// Only show the results of the battle
         #[structopt(long)]
         results_only: bool,
-        /// Choose the gamemode. Current supported: "Normal"
+        /// Choose the gamemode. Current supported: "Normal" (default) | "Hill"
         #[structopt(long, parse(from_os_str))]
         game_mode: Option<OsString>,
         /// Specify a random seed for robot spawning. It can be of any length.
@@ -127,6 +133,9 @@ enum Run {
         /// The network port to listen to.
         #[structopt(short, long, env = "PORT")]
         port: Option<u16>,
+        /// Choose the gamemode. Current supported: "Normal" (default) | "Hill"
+        #[structopt(long, parse(from_os_str))]
+        game_mode: Option<OsString>,
     },
 }
 
@@ -376,6 +385,7 @@ async fn try_main() -> anyhow::Result<()> {
                 redbot,
                 turn_num,
                 raw,
+                no_logs,
                 blue_logs_only,
                 red_logs_only,
                 results_only,
@@ -392,6 +402,7 @@ async fn try_main() -> anyhow::Result<()> {
                     },
                     game_mode,
                     !raw && !results_only,
+                    no_logs,
                     red_logs_only,
                     blue_logs_only,
                 )
@@ -414,7 +425,7 @@ async fn try_main() -> anyhow::Result<()> {
                 while let Some(line) = stdin.next_line().await.unwrap() {
                     match serde_json::from_str(&line) {
                         Ok(game_spec) => {
-                            let out = run_game(game_spec, game_mode, false, false, false).await?;
+                            let out = run_game(game_spec, game_mode, false, false, false, false).await?;
 
                             let mut value = serde_json::to_value(&out).unwrap();
                             if let serde_json::Value::Object(v) = &mut value {
@@ -432,12 +443,14 @@ async fn try_main() -> anyhow::Result<()> {
                 robots,
                 address,
                 port,
+                game_mode: game_mode_string
             } => {
                 let ids = robots
                     .iter()
                     .map(|id| RobotId::parse(id))
                     .collect::<Result<Vec<_>, _>>()?;
-                server::serve(ids, address, port).await?;
+                let game_mode = parse_game_mode(game_mode_string);
+                server::serve(ids, game_mode, address, port).await?;
             }
         },
 
@@ -802,6 +815,7 @@ async fn run_game(
     spec: GameSpec,
     game_mode: GameMode,
     display_turns: bool,
+    no_logs: bool,
     red_logs_only: bool,
     blue_logs_only: bool,
 ) -> anyhow::Result<MainOutput> {
@@ -827,7 +841,7 @@ async fn run_game(
         runners,
         |turn_state| {
             if display_turns {
-                display::display_turn(turn_state, !red_logs_only, !blue_logs_only)
+                display::display_turn(turn_state, !no_logs && !red_logs_only, !no_logs && !blue_logs_only)
                     .expect("printing failed");
             }
         },

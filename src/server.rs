@@ -15,23 +15,25 @@ use super::{RobotId, Runner};
 struct Context {
     r1: OwningRef<Arc<Vec<RobotId>>, RobotId>,
     ids: Arc<Vec<RobotId>>,
+    game_mode: logic::GameMode
 }
 
-pub async fn serve(ids: Vec<RobotId>, address: String, port: Option<u16>) -> anyhow::Result<()> {
+pub async fn serve(ids: Vec<RobotId>, game_mode: logic::GameMode, address: String, port: Option<u16>) -> anyhow::Result<()> {
     let ids = Arc::new(ids);
     let r1 = OwningRef::new(ids.clone()).map(|v| v.first().unwrap());
 
-    let ctx = Context { r1, ids };
+    let ctx = Context { r1, ids, game_mode };
     let ctx = warp::any().map(move || ctx.clone());
 
     let route = warp::path("getflags")
         .and(ctx.clone())
         .and(warp::get())
-        .map(move |Context { r1, .. }| {
+        .map(move |Context { r1, game_mode, .. }| {
             let (user1, robot1) = r1.display_id();
             let body = serde_json::json!({
                 "user": user1,
                 "robot": robot1,
+                "gameMode": game_mode
             });
             warp::reply::json(&body)
         })
@@ -86,6 +88,7 @@ pub async fn serve(ids: Vec<RobotId>, address: String, port: Option<u16>) -> any
 
     webbrowser::open(&url).ok();
     println!("Website running at {}", url);
+    println!("Robots are available in the opponent select menu");
     eprintln!("Press Enter to stop");
 
     let listener = tokio_stream::wrappers::TcpListenerStream::new(listener);
@@ -106,7 +109,7 @@ struct RunParams {
 }
 
 async fn run(
-    Context { r1, ids }: Context,
+    Context { r1, ids, game_mode }: Context,
     params: RunParams,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let r2 = OwningRef::new(ids).try_map(|ids| ids.get(params.id).ok_or_else(|| warp::reject()))?;
@@ -140,7 +143,7 @@ async fn run(
             params.turns,
             true,
             None,
-            logic::GameMode::Normal,
+            game_mode,
             None,
         )
         .await;
